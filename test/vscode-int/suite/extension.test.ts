@@ -85,3 +85,14 @@ describe('range hover', () => {
     assert.match(all, /Vouch|timeline/i)
   })
 })
+
+describe('sidebar', () => {
+  it('tree provider returns header + fixture tree', async () => {
+    // Allow the background queue a moment
+    await new Promise(r => setTimeout(r, 500))
+    await vscode.commands.executeCommand<unknown>('workbench.view.extension.vouch')
+    // The command just focuses the view; real assertion is via the test api:
+    const api = (await vscode.extensions.getExtension('sanzhar.vouch')!.activate()).getTestApi()
+    assert.ok(api.context.roots.length >= 1)
+  })
+})

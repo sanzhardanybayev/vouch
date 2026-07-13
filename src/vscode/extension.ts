@@ -5,6 +5,7 @@ import { StatusPipeline } from './pipeline'
 import { Gutter } from './gutter'
 import { registerHovers } from './hovers'
 import { VouchBaselineProvider } from './diff'
+import { CoverageTree } from './sidebar'
 
 let ctx: VouchContext | undefined
 // Reassigned below once the status pipeline is wired up; kept as a
@@ -51,6 +52,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
     }),
     vscode.window.onDidChangeVisibleTextEditors(eds => { for (const e of eds) void applyTo(e) }))
   for (const e of vscode.window.visibleTextEditors) void applyTo(e)
+
+  const tree = new CoverageTree(ctx, pipeline, context.subscriptions)
+  context.subscriptions.push(vscode.window.registerTreeDataProvider('vouch.coverage', tree))
 
   return { getTestApi: () => ({ context: ctx!, pipeline }) }
 }
