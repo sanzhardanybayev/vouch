@@ -3,4 +3,5 @@ node_modules/
 dist/
 out/
 out-int/
+.vscode-test/
 *.vsix
