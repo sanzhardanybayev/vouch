@@ -24,4 +24,13 @@ describe('shardPath / sourcePathOfShard', () => {
   it('accepts windows separators in input', () => {
     expect(sourcePathOfShard('.vouch\\reviews\\src\\a.ts\\a1b2c3d4.jsonl')).toBe('src/a.ts')
   })
+  it('rejects traversal, absolute, and degenerate source paths', () => {
+    expect(() => shardPath('../evil', 'a1b2c3d4')).toThrow()
+    expect(() => shardPath('a/../b', 'a1b2c3d4')).toThrow()
+    expect(() => shardPath('/abs/path', 'a1b2c3d4')).toThrow()
+    expect(() => shardPath('a//b', 'a1b2c3d4')).toThrow()
+    expect(() => shardPath('a/./b', 'a1b2c3d4')).toThrow()
+    expect(() => shardPath('C:/evil', 'a1b2c3d4')).toThrow()
+    expect(() => shardPath('', 'a1b2c3d4')).toThrow()
+  })
 })

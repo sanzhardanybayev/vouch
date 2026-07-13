@@ -5,6 +5,14 @@ export function authorSlug(email: string): string {
 }
 
 export function shardPath(sourcePath: string, slug: string): string {
+  if (sourcePath.startsWith('/') || /^[A-Za-z]:/.test(sourcePath)) {
+    throw new Error(`shardPath: absolute source path not allowed: ${sourcePath}`)
+  }
+  for (const seg of sourcePath.split('/')) {
+    if (seg === '' || seg === '.' || seg === '..') {
+      throw new Error(`shardPath: invalid source path segment in: ${sourcePath}`)
+    }
+  }
   return `.vouch/reviews/${sourcePath}/${slug}.jsonl`
 }
 

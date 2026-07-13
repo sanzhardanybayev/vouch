@@ -45,4 +45,12 @@ describe('initVouch', () => {
     expect(attrs).toContain('*.png binary')
     expect(attrs).toContain('.vouch/reviews/** merge=union')
   })
+  it('does not clobber an existing config.json', async () => {
+    const { writeFile, mkdir } = await import('node:fs/promises')
+    const existing = '{"schemaVersion":1,"custom":"x"}'
+    await mkdir(join(dir, '.vouch'), { recursive: true })
+    await writeFile(join(dir, '.vouch/config.json'), existing)
+    await initVouch(dir)
+    expect(await readFile(join(dir, '.vouch/config.json'), 'utf8')).toBe(existing)
+  })
 })
