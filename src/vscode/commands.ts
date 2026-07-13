@@ -14,6 +14,7 @@ import { headSha, identity, isDirty, remoteUrl } from './gitinfo'
 import { showDiff, findRecord } from './diff'
 import { commitUrl } from '../core/giturl'
 import { isValidSha } from '../core/hovermd'
+import { openTimeline } from './panel'
 
 async function resolveAuthor(
   extCtx: vscode.ExtensionContext, cwd: string,
@@ -162,6 +163,7 @@ export function registerCommands(
   reg('vouch.file', () => attest(extCtx, ctx, refresh, 'file'))
   reg('vouch.unvouch', () => unvouch(extCtx, ctx, refresh))
   reg2('vouch.showDiff', (recordId: string) => showDiff(ctx, pipeline, recordId))
+  reg2('vouch.openTimeline', (recordId: string) => openTimeline(ctx, recordId))
   reg2('vouch.openCommitOnWeb', async (recordId: string) => {
     const found = findRecord(ctx, recordId)
     if (!found?.record.commit) {

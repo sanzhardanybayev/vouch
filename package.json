@@ -20,6 +20,7 @@
       { "command": "vouch.unvouch", "title": "Vouch: Revoke my review" },
       { "command": "vouch.showDiff", "title": "Vouch: Diff since my review" },
       { "command": "vouch.openCommitOnWeb", "title": "Vouch: Open review commit on web" },
+      { "command": "vouch.openTimeline", "title": "Vouch: Open review timeline" },
       { "command": "vouch.reattach", "title": "Vouch: Re-attach orphaned reviews" }
     ],
     "menus": {
