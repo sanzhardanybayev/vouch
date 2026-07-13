@@ -44,6 +44,16 @@
     },
     "views": {
       "vouch": [ { "id": "vouch.coverage", "name": "Review Coverage" } ]
+    },
+    "configuration": {
+      "title": "Vouch",
+      "properties": {
+        "vouch.codeLens.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a CodeLens above reviewed code with reviewer, time, and links to the timeline / re-review / diff."
+        }
+      }
     }
   },
   "scripts": {

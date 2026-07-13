@@ -114,3 +114,32 @@ describe('v1.1 honest coverage + reviewers', () => {
     // (Exact % depends on fixture contents; keep the assertion robust.)
   })
 })
+
+describe('v1.1 CodeLens', () => {
+  it('provides a status lens on the reviewed range and none when disabled', async () => {
+    const ws = vscode.workspace.workspaceFolders![0]!.uri.fsPath
+    const doc = await vscode.workspace.openTextDocument(path.join(ws, 'src/calc.ts'))
+    await vscode.window.showTextDocument(doc)
+
+    const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>(
+      'vscode.executeCodeLensProvider', doc.uri)
+    const vouchLenses = (lenses ?? []).filter(l =>
+      typeof l.command?.title === 'string' &&
+      (l.command.title.includes('Reviewed') || l.command.title.includes('Dismissed')
+        || l.command.title === 'Re-review' || l.command.title === 'Diff'))
+    assert.ok(vouchLenses.length >= 1, 'at least one vouch codelens')
+
+    await vscode.workspace.getConfiguration('vouch').update(
+      'codeLens.enabled', false, vscode.ConfigurationTarget.Global)
+    // Give the provider a tick to observe the config change.
+    await new Promise(r => setTimeout(r, 200))
+    const lenses2 = await vscode.commands.executeCommand<vscode.CodeLens[]>(
+      'vscode.executeCodeLensProvider', doc.uri)
+    const vouch2 = (lenses2 ?? []).filter(l =>
+      typeof l.command?.title === 'string' &&
+      (l.command.title.includes('Reviewed') || l.command.title.includes('Dismissed')))
+    assert.strictEqual(vouch2.length, 0, 'no vouch codelens when disabled')
+    await vscode.workspace.getConfiguration('vouch').update(
+      'codeLens.enabled', true, vscode.ConfigurationTarget.Global)
+  })
+})
