@@ -24,13 +24,26 @@ function cmd(command: string, recordId: string): string {
   return `command:${command}?${encodeURIComponent(JSON.stringify([recordId]))}`
 }
 
+// Escapes markdown-active characters in user-controlled text (authorName,
+// comment) so it can never be interpreted as markdown — in particular so a
+// `[label](command:...)` sequence can't become a clickable link. Backslash
+// must be escaped first so we don't double-escape the backslashes we add
+// for the other characters.
+export function escapeMd(s: string): string {
+  return s.replace(/([\\`*_{}[\]()<>#+\-!|])/g, '\\$1')
+}
+
 export function rangeHoverMd(entries: HoverEntry[], nowIso: string): string {
   const parts: string[] = []
   for (const e of entries) {
     const sha = e.commit ? e.commit.slice(0, 7) : ''
     const shaMd = !sha ? '' : e.commitLink ? ` ([\`${sha}\`](${e.commitLink}))` : ` (\`${sha}\`)`
-    parts.push(`**${statusLabel(e.status)}** — ${e.authorName}, ${relTime(e.createdAt, nowIso)}${shaMd}`)
-    if (e.comment) parts.push(`> ${e.comment}`)
+    parts.push(
+      `**${statusLabel(e.status)}** — ${escapeMd(e.authorName)}, ${relTime(e.createdAt, nowIso)}${shaMd}`)
+    if (e.comment) {
+      const quoted = e.comment.split(/\r?\n/).map(line => `> ${escapeMd(line)}`).join('\n')
+      parts.push(quoted)
+    }
     parts.push(
       `[Open timeline](${cmd('vouch.openTimeline', e.recordId)}) · ` +
       `[Diff since review](${cmd('vouch.showDiff', e.recordId)}) · ` +
@@ -44,6 +57,6 @@ export function callSiteMd(
   nowIso: string,
 ): string {
   return entries.map(e =>
-    `Vouch: ${statusLabel(e.status)} — ${e.authorName}, ${relTime(e.createdAt, nowIso)}`,
+    `Vouch: ${statusLabel(e.status)} — ${escapeMd(e.authorName)}, ${relTime(e.createdAt, nowIso)}`,
   ).join('\n\n')
 }

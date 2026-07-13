@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { rangeHoverMd, callSiteMd, relTime } from '../../src/core/hovermd'
+import { rangeHoverMd, callSiteMd, relTime, escapeMd } from '../../src/core/hovermd'
 
 const NOW = '2026-07-13T12:00:00Z'
 
@@ -44,5 +44,59 @@ describe('callSiteMd', () => {
     ], NOW)
     expect(md).toContain('Vouch: ✓ reviewed — San, 2d ago')
     expect(md).toContain('Vouch: ⚠ dismissed (changed since review) — Bob')
+  })
+
+  it('escapes a malicious authorName so brackets cannot form a link', () => {
+    const md = callSiteMd([
+      { authorName: '[x](command:evil.cmd)', status: 'reviewed', createdAt: NOW },
+    ], NOW)
+    expect(md).not.toContain('[x](command:evil.cmd)')
+    expect(md).toContain(escapeMd('[x](command:evil.cmd)'))
+  })
+})
+
+describe('escapeMd', () => {
+  it('escapes markdown-active characters', () => {
+    expect(escapeMd('[a](b)')).toBe('\\[a\\]\\(b\\)')
+    expect(escapeMd('back`tick`')).toBe('back\\`tick\\`')
+    expect(escapeMd('a\\b')).toBe('a\\\\b')
+    expect(escapeMd('<tag>')).toBe('\\<tag\\>')
+    expect(escapeMd('a|b')).toBe('a\\|b')
+    expect(escapeMd('plain text 123')).toBe('plain text 123')
+  })
+})
+
+describe('rangeHoverMd — injection safety', () => {
+  it('a malicious comment with a command link cannot survive as a clickable link', () => {
+    const md = rangeHoverMd([{
+      authorName: 'San', status: 'reviewed', createdAt: NOW,
+      comment: '[see details](command:workbench.action.terminal.sendSequence?evil)',
+      commit: '', commitLink: null, recordId: 'r1',
+    }], NOW)
+    expect(md).not.toContain('](command:workbench')
+    expect(md).not.toContain('](command:evil')
+    expect(md).toContain(escapeMd('[see details](command:workbench.action.terminal.sendSequence?evil)'))
+  })
+
+  it('escapes brackets in a malicious authorName', () => {
+    const md = rangeHoverMd([{
+      authorName: '[click me](command:evil.cmd)', status: 'reviewed', createdAt: NOW,
+      commit: '', commitLink: null, recordId: 'r1',
+    }], NOW)
+    expect(md).not.toContain('](command:evil')
+    expect(md).toContain(escapeMd('[click me](command:evil.cmd)'))
+  })
+
+  it('blockquotes every line of a multi-line comment so it cannot escape the quote', () => {
+    const md = rangeHoverMd([{
+      authorName: 'San', status: 'reviewed', createdAt: NOW,
+      comment: 'line one\nline two\r\nline three',
+      commit: '', commitLink: null, recordId: 'r1',
+    }], NOW)
+    expect(md).toContain('> line one')
+    expect(md).toContain('> line two')
+    expect(md).toContain('> line three')
+    // no unquoted line leaks out of the blockquote
+    expect(md).not.toMatch(/\n(?!> )line (two|three)/)
   })
 })

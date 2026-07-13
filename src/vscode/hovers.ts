@@ -39,7 +39,10 @@ export function registerHovers(
           recordId: e.record.id,
         }))
         const md = new vscode.MarkdownString(rangeHoverMd(entries, new Date().toISOString()))
-        md.isTrusted = true
+        // Only allowlist the exact command links rangeHoverMd emits — never
+        // grant blanket isTrusted, since authorName/comment are attacker-
+        // controlled text from other users' .vouch/ records.
+        md.isTrusted = { enabledCommands: ['vouch.openTimeline', 'vouch.showDiff', 'vouch.reReview'] }
         return new vscode.Hover(md)
       }
 
@@ -50,6 +53,11 @@ export function registerHovers(
         const lookup = vscode.commands.executeCommand<
           (vscode.Location | vscode.LocationLink)[] | undefined
         >('vscode.executeDefinitionProvider', doc.uri, pos)
+        // If the timeout wins the race, `lookup` keeps running in the
+        // background; guard it so a late rejection can't surface as an
+        // unhandled promise rejection. (vscode's Thenable only has `.then`,
+        // not `.catch`.)
+        lookup.then(undefined, () => undefined)
         const timeout = new Promise<null>(r => setTimeout(() => r(null), 400))
         const res = await Promise.race([lookup, timeout])
         if (token.isCancellationRequested) return undefined
