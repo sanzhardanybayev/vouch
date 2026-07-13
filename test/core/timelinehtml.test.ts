@@ -62,6 +62,27 @@ describe('timelineHtml', () => {
     expect(html).not.toContain('abc1234)')
   })
 
+  it('restricts commitLink to https:// — a javascript: URI renders no link but still shows the sha', () => {
+    const html = timelineHtml({
+      sourcePath: 'src/a.ts',
+      nowIso: NOW,
+      users: [{
+        name: 'San', email: 's@x.com',
+        chains: [{
+          revoked: false,
+          entries: [{
+            recordId: 'r7', status: 'reviewed' as const, createdAt: NOW,
+            commit: 'abc1234def', commitLink: 'javascript:alert(1)',
+            kind: 'selection',
+          }],
+        }],
+      }],
+    }, 'vscode-resource:', 'NONCE')
+    expect(html).not.toContain('href="javascript:')
+    expect(html).not.toContain('<a ')
+    expect(html).toContain('<code>abc1234</code>')
+  })
+
   it('renders no sha/link when commit is empty even if commitLink is (wrongly) set', () => {
     const html = timelineHtml({
       sourcePath: 'src/a.ts',

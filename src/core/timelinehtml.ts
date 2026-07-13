@@ -32,7 +32,13 @@ function entryHtml(e: TimelineEntry, nowIso: string): string {
   // commit can never produce a sha or a link, regardless of what the caller
   // passes as commitLink.
   const sha = e.commit && isValidSha(e.commit) ? e.commit.slice(0, 7) : ''
-  const shaHtml = !sha ? '' : e.commitLink
+  // Only ever render commitLink as a clickable href when it is https:// —
+  // this builder's interface (commitLink: string | null) otherwise permits a
+  // future caller to pass a javascript:/command:/data: URI, which would be
+  // exploitable the moment it's interpolated into an href attribute. The
+  // sole current caller (panel.ts) only ever produces commitUrl() output
+  // (https://...), so this is defense-in-depth, not a behavior change.
+  const shaHtml = !sha ? '' : e.commitLink && e.commitLink.startsWith('https://')
     ? ` <a href="${escapeHtml(e.commitLink)}"><code>${escapeHtml(sha)}</code></a>`
     : ` <code>${escapeHtml(sha)}</code>`
   const what = e.symbol ? `${e.kind} ${e.symbol}`
@@ -42,7 +48,7 @@ function entryHtml(e: TimelineEntry, nowIso: string): string {
     ? ` <button data-cmd="reReview" data-id="${escapeHtml(e.recordId)}">Re-review</button>` : ''
   const diffBtn = e.status !== 'historical'
     ? ` <button data-cmd="showDiff" data-id="${escapeHtml(e.recordId)}">Diff</button>` : ''
-  return `<li class="${e.status}"><span class="glyph">${GLYPH[e.status]}</span> ` +
+  return `<li class="${escapeHtml(e.status)}"><span class="glyph">${GLYPH[e.status]}</span> ` +
     `<strong>${e.status}</strong> — ${escapeHtml(what)}, ${relTime(e.createdAt, nowIso)}` +
     `${shaHtml}${actions}${diffBtn}${comment}</li>`
 }
