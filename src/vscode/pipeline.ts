@@ -13,7 +13,7 @@ export interface FileStatus {
 export class StatusPipeline {
   private readonly emitter = new vscode.EventEmitter<vscode.Uri>()
   readonly onDidUpdate = this.emitter.event
-  private cache = new Map<string, { version: number; gen: number; status: FileStatus }>()
+  private cache = new WeakMap<vscode.TextDocument, { version: number; gen: number; status: FileStatus }>()
   private gen = 0
   private timers = new Map<string, ReturnType<typeof setTimeout>>()
 
@@ -28,7 +28,9 @@ export class StatusPipeline {
 
   refreshVisible(): void {
     for (const ed of vscode.window.visibleTextEditors) {
-      void this.statusFor(ed.document).then(() => this.emitter.fire(ed.document.uri))
+      void this.statusFor(ed.document)
+        .then(() => this.emitter.fire(ed.document.uri))
+        .catch(() => {})
     }
   }
 
@@ -37,14 +39,21 @@ export class StatusPipeline {
     const t = this.timers.get(key)
     if (t) clearTimeout(t)
     this.timers.set(key, setTimeout(() => {
-      void this.statusFor(doc).then(() => this.emitter.fire(doc.uri))
+      void this.statusFor(doc)
+        .then(() => this.emitter.fire(doc.uri))
+        .catch(() => {})
     }, 300))
   }
 
   async statusFor(doc: vscode.TextDocument): Promise<FileStatus> {
-    const key = doc.uri.toString()
-    const hit = this.cache.get(key)
+    const hit = this.cache.get(doc)
     if (hit && hit.version === doc.version && hit.gen === this.gen) return hit.status
+
+    // Captured synchronously, before any await below, so an edit or
+    // invalidate() that lands during the await can't be mistaken for the
+    // state this computation actually reflects.
+    const versionAtStart = doc.version
+    const genAtStart = this.gen
 
     const empty: FileStatus = { entries: [], coverage: null }
     const root = this.ctx.rootFor(doc.uri)
@@ -63,7 +72,11 @@ export class StatusPipeline {
       return { record, res: resolveRecord(record, docText, symRange) }
     })
     const status: FileStatus = { entries, coverage: fileCoverage(entries, docText) }
-    this.cache.set(key, { version: doc.version, gen: this.gen, status })
+    // If the document or invalidation generation moved on while we were
+    // awaiting symbols, this result is already stale — return it (better
+    // than nothing) but don't let it poison the cache for the next call.
+    if (doc.version !== versionAtStart || this.gen !== genAtStart) return status
+    this.cache.set(doc, { version: versionAtStart, gen: genAtStart, status })
     return status
   }
 }

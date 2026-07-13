@@ -38,12 +38,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
     gutter.apply(editor, await pipeline.statusFor(editor.document))
   }
   refresh = () => { pipeline.invalidate(); pipeline.refreshVisible() }
-  pipeline.onDidUpdate(uri => {
-    for (const ed of vscode.window.visibleTextEditors) {
-      if (ed.document.uri.toString() === uri.toString()) void applyTo(ed)
-    }
-  })
   context.subscriptions.push(
+    pipeline.onDidUpdate(uri => {
+      for (const ed of vscode.window.visibleTextEditors) {
+        if (ed.document.uri.toString() === uri.toString()) void applyTo(ed)
+      }
+    }),
     vscode.window.onDidChangeVisibleTextEditors(eds => { for (const e of eds) void applyTo(e) }))
   for (const e of vscode.window.visibleTextEditors) void applyTo(e)
 
