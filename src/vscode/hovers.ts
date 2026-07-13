@@ -1,5 +1,5 @@
 import * as vscode from 'vscode'
-import { callSiteMd, rangeHoverMd, type HoverEntry } from '../core/hovermd'
+import { callSiteMd, rangeHoverMd, isValidSha, type HoverEntry } from '../core/hovermd'
 import { commitUrl } from '../core/giturl'
 import { overlaps } from '../core/attest'
 import type { VouchContext } from './context'
@@ -35,7 +35,8 @@ export function registerHovers(
           createdAt: e.record.createdAt,
           comment: e.record.comment,
           commit: e.record.commit,
-          commitLink: e.record.commit && remote ? commitUrl(remote, e.record.commit) : null,
+          commitLink: e.record.commit && isValidSha(e.record.commit) && remote
+            ? commitUrl(remote, e.record.commit) : null,
           recordId: e.record.id,
         }))
         const md = new vscode.MarkdownString(rangeHoverMd(entries, new Date().toISOString()))

@@ -26,17 +26,31 @@ function cmd(command: string, recordId: string): string {
 
 // Escapes markdown-active characters in user-controlled text (authorName,
 // comment) so it can never be interpreted as markdown — in particular so a
-// `[label](command:...)` sequence can't become a clickable link. Backslash
-// must be escaped first so we don't double-escape the backslashes we add
-// for the other characters.
+// `[label](command:...)` sequence can't become a clickable link. This is a
+// single global-regex pass (not sequential per-character passes), so the
+// order of characters in the class is irrelevant — none of the replacements
+// can re-introduce a match for an earlier one.
 export function escapeMd(s: string): string {
   return s.replace(/([\\`*_{}[\]()<>#+\-!|])/g, '\\$1')
+}
+
+// The `commit` field of a ReviewRecord comes from shared, cross-user
+// .vouch/*.jsonl records where only `id` is validated on parse — `commit` is
+// otherwise untrusted attacker-controlled text. If it were interpolated into
+// a markdown link destination unchecked, a value like
+// `abc1234)[PWNED](command:vouch.reReview?%5B%22attacker-arg%22%5D` would
+// forge a second clickable command link with an attacker-chosen argument
+// (the enabledCommands allowlist only restricts the command *name*, not its
+// arguments). Restricting to a plain hex string makes that structurally
+// impossible: a valid git sha can never contain `)`, `[`, `]`, `(`, or `:`.
+export function isValidSha(commit: string): boolean {
+  return /^[0-9a-f]{4,40}$/i.test(commit)
 }
 
 export function rangeHoverMd(entries: HoverEntry[], nowIso: string): string {
   const parts: string[] = []
   for (const e of entries) {
-    const sha = e.commit ? e.commit.slice(0, 7) : ''
+    const sha = e.commit && isValidSha(e.commit) ? e.commit.slice(0, 7) : ''
     const shaMd = !sha ? '' : e.commitLink ? ` ([\`${sha}\`](${e.commitLink}))` : ` (\`${sha}\`)`
     parts.push(
       `**${statusLabel(e.status)}** — ${escapeMd(e.authorName)}, ${relTime(e.createdAt, nowIso)}${shaMd}`)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { rangeHoverMd, callSiteMd, relTime, escapeMd } from '../../src/core/hovermd'
+import { rangeHoverMd, callSiteMd, relTime, escapeMd, isValidSha } from '../../src/core/hovermd'
 
 const NOW = '2026-07-13T12:00:00Z'
 
@@ -98,5 +98,57 @@ describe('rangeHoverMd — injection safety', () => {
     expect(md).toContain('> line three')
     // no unquoted line leaks out of the blockquote
     expect(md).not.toMatch(/\n(?!> )line (two|three)/)
+  })
+
+  it('a malicious commit forging a second command link is rejected outright (no sha, no link)', () => {
+    const md = rangeHoverMd([{
+      authorName: 'San', status: 'reviewed', createdAt: NOW,
+      commit: 'abc1234)[PWNED](command:vouch.reReview?x',
+      commitLink: 'command:vouch.reReview?%5B%22attacker-arg%22%5D',
+      recordId: 'r1',
+    }], NOW)
+    // Only the three legitimate action links should produce `](command:` —
+    // a forged commit must not add a fourth.
+    const commandLinkCount = (md.match(/\]\(command:/g) ?? []).length
+    expect(commandLinkCount).toBe(3)
+    expect(md).not.toContain('PWNED')
+    expect(md).not.toContain('attacker-arg')
+  })
+})
+
+describe('rangeHoverMd — commit sha validation', () => {
+  it('renders the linked short sha for a valid 40-hex commit', () => {
+    const commit = 'a'.repeat(40)
+    const md = rangeHoverMd([{
+      authorName: 'San', status: 'reviewed', createdAt: NOW,
+      commit, commitLink: `https://x/commit/${commit}`, recordId: 'r1',
+    }], NOW)
+    expect(md).toContain(`[\`${commit.slice(0, 7)}\`](https://x/commit/${commit})`)
+  })
+
+  it('renders the linked short sha for a valid 7-hex commit', () => {
+    const md = rangeHoverMd([{
+      authorName: 'San', status: 'reviewed', createdAt: NOW,
+      commit: 'abc1234', commitLink: 'https://x/commit/abc1234', recordId: 'r1',
+    }], NOW)
+    expect(md).toContain('[`abc1234`](https://x/commit/abc1234)')
+  })
+})
+
+describe('isValidSha', () => {
+  it('accepts valid hex lengths (4–40)', () => {
+    expect(isValidSha('abcd')).toBe(true)
+    expect(isValidSha('abc1234')).toBe(true)
+    expect(isValidSha('abc1234def5678')).toBe(true)
+    expect(isValidSha('a'.repeat(40))).toBe(true)
+    expect(isValidSha('A1B2C3D4')).toBe(true)
+  })
+
+  it('rejects non-hex, too-short, too-long, or structurally malicious values', () => {
+    expect(isValidSha('')).toBe(false)
+    expect(isValidSha('abc')).toBe(false) // too short
+    expect(isValidSha('a'.repeat(41))).toBe(false) // too long
+    expect(isValidSha('xyz1234')).toBe(false) // non-hex chars
+    expect(isValidSha('abc1234)[PWNED](command:vouch.reReview?x')).toBe(false)
   })
 })
