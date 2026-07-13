@@ -133,6 +133,22 @@ describe('rangeHoverMd — commit sha validation', () => {
     }], NOW)
     expect(md).toContain('[`abc1234`](https://x/commit/abc1234)')
   })
+
+  it('does not render a non-https commitLink as a clickable sha link (command:/javascript:)', () => {
+    const commandMd = rangeHoverMd([{
+      authorName: 'San', status: 'reviewed', createdAt: NOW,
+      commit: 'abc1234def5678', commitLink: 'command:vouch.reReview?x', recordId: 'r1',
+    }], NOW)
+    expect(commandMd).not.toContain('](command:vouch.reReview?x')
+    expect(commandMd).toContain('(`abc1234`)')
+
+    const jsMd = rangeHoverMd([{
+      authorName: 'San', status: 'reviewed', createdAt: NOW,
+      commit: 'abc1234def5678', commitLink: 'javascript:alert(1)', recordId: 'r1',
+    }], NOW)
+    expect(jsMd).not.toContain('](javascript:')
+    expect(jsMd).toContain('(`abc1234`)')
+  })
 })
 
 describe('isValidSha', () => {

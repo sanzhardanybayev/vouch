@@ -51,7 +51,8 @@ export function rangeHoverMd(entries: HoverEntry[], nowIso: string): string {
   const parts: string[] = []
   for (const e of entries) {
     const sha = e.commit && isValidSha(e.commit) ? e.commit.slice(0, 7) : ''
-    const shaMd = !sha ? '' : e.commitLink ? ` ([\`${sha}\`](${e.commitLink}))` : ` (\`${sha}\`)`
+    const shaMd = !sha ? '' : e.commitLink && e.commitLink.startsWith('https://')
+      ? ` ([\`${sha}\`](${e.commitLink}))` : ` (\`${sha}\`)`
     parts.push(
       `**${statusLabel(e.status)}** — ${escapeMd(e.authorName)}, ${relTime(e.createdAt, nowIso)}${shaMd}`)
     if (e.comment) {

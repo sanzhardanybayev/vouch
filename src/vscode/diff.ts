@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 import { baselineSlice } from '../core/baseline'
+import { isValidSha } from '../core/hovermd'
 import { splitLines } from '../core/text'
 import type { ReviewRecord } from '../core/types'
 import type { VouchContext } from './context'
@@ -16,9 +17,22 @@ export class VouchBaselineProvider implements vscode.TextDocumentContentProvider
   }
 }
 
+// Baseline/current text pairs accumulate one entry per showDiff call and are
+// never explicitly released (there's no "close" hook for a diff tab), so the
+// map would otherwise grow unbounded over a long editing session. Cap it: the
+// map is insertion-ordered, so once it exceeds 50 entries, drop the oldest
+// ones first — 50 entries is ~25 recent diffs (a baseline+current pair per
+// showDiff), comfortably more than anyone needs to keep open at once.
+const MAX_CONTENTS = 50
+
 function register(text: string, label: string): vscode.Uri {
   const key = `/${counter++}/${label}`
   contents.set(key, text)
+  while (contents.size > MAX_CONTENTS) {
+    const oldest = contents.keys().next().value
+    if (oldest === undefined) break
+    contents.delete(oldest)
+  }
   return vscode.Uri.from({ scheme: VouchBaselineProvider.scheme, path: key })
 }
 
@@ -43,7 +57,7 @@ export async function showDiff(
   const found = findRecord(ctx, recordId)
   if (!found) { void vscode.window.showWarningMessage('Vouch: record not found.'); return }
   const { record, rootDir, sourcePath } = found
-  if (!record.commit) {
+  if (!record.commit || !isValidSha(record.commit)) {
     void vscode.window.showWarningMessage('Vouch: review has no commit (not a git repo at review time).')
     return
   }

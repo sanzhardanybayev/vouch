@@ -39,6 +39,7 @@ export class StatusPipeline {
     const t = this.timers.get(key)
     if (t) clearTimeout(t)
     this.timers.set(key, setTimeout(() => {
+      this.timers.delete(key)
       void this.statusFor(doc)
         .then(() => this.emitter.fire(doc.uri))
         .catch(() => {})
