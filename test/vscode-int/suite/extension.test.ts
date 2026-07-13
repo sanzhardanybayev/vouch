@@ -50,3 +50,24 @@ describe('vouch.selection', () => {
     assert.strictEqual(rec.author.email, 'int@test.dev')
   })
 })
+
+describe('status pipeline', () => {
+  it('reports reviewed for the fresh record, dismissed after an edit', async () => {
+    const ws = vscode.workspace.workspaceFolders![0]!.uri.fsPath
+    const doc = await vscode.workspace.openTextDocument(path.join(ws, 'src/calc.ts'))
+    const editor = await vscode.window.showTextDocument(doc)
+    const api = (await vscode.extensions.getExtension('sanzhar.vouch')!.activate()).getTestApi()
+
+    let st = await api.pipeline.statusFor(doc)
+    assert.strictEqual(st.entries.length, 1) // record from the Task 11 test
+    assert.strictEqual(st.entries[0].res.status, 'reviewed')
+    assert.deepStrictEqual(st.entries[0].res.effectiveRange, [1, 3])
+
+    await editor.edit(b => b.replace(
+      new vscode.Range(1, 0, 1, doc.lineAt(1).text.length), '  return a + b + 1'))
+    st = await api.pipeline.statusFor(doc)
+    assert.strictEqual(st.entries[0].res.status, 'dismissed')
+
+    await vscode.commands.executeCommand('workbench.action.files.revert') // restore for later tests
+  })
+})

@@ -1,15 +1,17 @@
 import * as vscode from 'vscode'
 import { VouchContext } from './context'
 import { registerCommands } from './commands'
+import { StatusPipeline } from './pipeline'
+import { Gutter } from './gutter'
 
 let ctx: VouchContext | undefined
-// no-op until Task 12 wires decorations; kept as a module-scope `let` so
-// registerCommands can capture a stable closure that always calls the
-// current implementation.
+// Reassigned below once the status pipeline is wired up; kept as a
+// module-scope `let` so registerCommands can capture a stable closure that
+// always calls the current implementation.
 let refresh: () => void = () => {}
 
 export async function activate(context: vscode.ExtensionContext): Promise<{
-  getTestApi: () => { context: VouchContext }
+  getTestApi: () => { context: VouchContext; pipeline: StatusPipeline }
 }> {
   ctx = await VouchContext.create()
   context.subscriptions.push({ dispose: () => ctx?.dispose() })
@@ -28,7 +30,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
   context.subscriptions.push(watcher)
   context.subscriptions.push({ dispose: () => { if (timer) clearTimeout(timer) } })
 
-  return { getTestApi: () => ({ context: ctx! }) }
+  const pipeline = new StatusPipeline(ctx, context.subscriptions)
+  const gutter = new Gutter(context.extensionUri)
+  context.subscriptions.push(gutter)
+
+  const applyTo = async (editor: vscode.TextEditor): Promise<void> => {
+    gutter.apply(editor, await pipeline.statusFor(editor.document))
+  }
+  refresh = () => { pipeline.invalidate(); pipeline.refreshVisible() }
+  pipeline.onDidUpdate(uri => {
+    for (const ed of vscode.window.visibleTextEditors) {
+      if (ed.document.uri.toString() === uri.toString()) void applyTo(ed)
+    }
+  })
+  context.subscriptions.push(
+    vscode.window.onDidChangeVisibleTextEditors(eds => { for (const e of eds) void applyTo(e) }))
+  for (const e of vscode.window.visibleTextEditors) void applyTo(e)
+
+  return { getTestApi: () => ({ context: ctx!, pipeline }) }
 }
 
 export function deactivate(): void {}
