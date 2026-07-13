@@ -6,13 +6,14 @@ import { fileCoverage, pct, type FileCoverage } from '../core/coverage'
 import { countLines } from '../core/text'
 import { isInsideRoot } from '../core/paths'
 import { buildTree, headerStats, type TreeFile, type TreeFolder } from '../core/treemodel'
+import { aggregateEngineers } from '../core/engineers'
 import type { VouchContext, RootEntry } from './context'
 import type { StatusPipeline } from './pipeline'
 import { lsFiles } from './gitinfo'
 
 const MAX_FILES = 20_000
 
-type CacheEntry = { mtimeMs: number; gen: number; coverage: FileCoverage | null; reviewed: boolean }
+type CacheEntry = { mtimeMs: number; coverage: FileCoverage | null; reviewed: boolean }
 
 type Item =
   | { t: 'header' }
@@ -29,10 +30,10 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
   readonly onDidChangeTreeData = this.emitter.event
 
   private covCache = new Map<string, CacheEntry>()
-  private gen = 0
   private fileList = new Map<string, string[]>() // rootDir -> repo-relative paths
   private queue: { root: RootEntry; sourcePath: string }[] = []
   private queueRunning = false
+  private fsWatchTimer: ReturnType<typeof setTimeout> | undefined
 
   constructor(
     private readonly ctx: VouchContext,
@@ -43,6 +44,20 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
       ctx.onDidChange(() => this.refresh()),
       pipeline.onDidUpdate(uri => this.onPipelineUpdate(uri)),
     )
+    // Files created or deleted after activation must be reflected in the
+    // tracked-file list — otherwise a deleted file becomes a permanent
+    // 'pending' ghost (never removed from fileList) and a new file is never
+    // counted at all. Content edits (onDidChange) don't affect membership,
+    // so we deliberately don't watch those here; the pipeline/attest flow
+    // already covers content changes.
+    const fsWatcher = vscode.workspace.createFileSystemWatcher('**/*')
+    const scheduleFileListReload = (): void => {
+      if (this.fsWatchTimer) clearTimeout(this.fsWatchTimer)
+      this.fsWatchTimer = setTimeout(() => { void this.loadFileLists().then(() => this.refresh()) }, 300)
+    }
+    fsWatcher.onDidCreate(scheduleFileListReload)
+    fsWatcher.onDidDelete(scheduleFileListReload)
+    subscriptions.push(fsWatcher, { dispose: () => { if (this.fsWatchTimer) clearTimeout(this.fsWatchTimer) } })
     void this.loadFileLists().then(() => this.refresh())
   }
 
@@ -66,20 +81,27 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
   }
 
   refresh(): void {
-    // Anything not refreshed by the pass we're about to start is left over
-    // from an even older generation (e.g. a file that fell out of the
-    // attested set, or a root that no longer exists) — drop it so covCache
-    // doesn't grow unboundedly across refreshes.
-    for (const [key, entry] of this.covCache) {
-      if (entry.gen !== this.gen) this.covCache.delete(key)
+    // Cache validity is presence+mtime based (see CacheEntry/treeFiles), not
+    // generation based — so a refresh() must NOT mass-invalidate. It only
+    // needs to (a) prune entries that fell out of the tracked-file set (a
+    // deleted file, or a root that no longer exists) so covCache doesn't grow
+    // unboundedly, and (b) requeue the small set of files that actually need
+    // recomputing.
+    const validAbs = new Set(this.ctx.roots.flatMap(root =>
+      (this.fileList.get(root.rootDir) ?? []).map(p => path.join(root.rootDir, p))))
+    for (const key of this.covCache.keys()) {
+      if (!validAbs.has(key)) this.covCache.delete(key)
     }
-    this.gen++
-    // Enqueue EVERY tracked file (v1.1: honest coverage over all files), not
-    // just attested ones. Attested files resolve records; unreviewed files are
-    // line-counted only.
+    // Requeue only: attested files (the record set may have changed — an
+    // attest/dismiss/revoke — even when the file's own text didn't, so these
+    // always need a recompute) and files with no cache entry yet (never
+    // counted). Already-counted unreviewed files didn't change, so leave
+    // them cached — this is what keeps a single attest/dismiss from
+    // requeuing the whole tree.
     this.queue = this.ctx.roots.flatMap(root =>
       (this.fileList.get(root.rootDir) ?? [])
         .filter(p => fs.existsSync(path.join(root.rootDir, p)))
+        .filter(p => this.isAttested(root, p) || !this.covCache.has(path.join(root.rootDir, p)))
         .map(sourcePath => ({ root, sourcePath })))
     this.runQueue()
     this.emitter.fire(undefined)
@@ -132,34 +154,37 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
           // A live buffer has no disk mtime; -1 just needs to differ from any
           // real fs mtimeMs so a later disk read (once the doc closes) isn't
           // mistaken for "unchanged" and skipped.
-          this.covCache.set(abs, { mtimeMs: -1, gen: this.gen, coverage: status.coverage, reviewed: true })
+          this.covCache.set(abs, { mtimeMs: -1, coverage: status.coverage, reviewed: true })
           return
         }
+        // Always recompute for attested files — never mtime-skip. The
+        // attested record set can change (attest/dismiss/revoke) even when
+        // the file's own text and mtime didn't, so a cache hit here would
+        // silently serve a stale coverage after a review action.
         const stat = fs.statSync(abs)
-        const hit = this.covCache.get(abs)
-        if (!hit || hit.mtimeMs !== stat.mtimeMs || hit.gen !== this.gen) {
-          const text = fs.readFileSync(abs, 'utf8')
-          const state = job.root.store.stateFor(job.sourcePath)!
-          const entries = state.current.map(record => ({
-            record, res: resolveRecord(record, text) })) // text-only (spec §8)
-          this.covCache.set(abs, {
-            mtimeMs: stat.mtimeMs, gen: this.gen, coverage: fileCoverage(entries, text), reviewed: true })
-        }
+        const text = fs.readFileSync(abs, 'utf8')
+        const state = job.root.store.stateFor(job.sourcePath)!
+        const entries = state.current.map(record => ({
+          record, res: resolveRecord(record, text) })) // text-only (spec §8)
+        this.covCache.set(abs, {
+          mtimeMs: stat.mtimeMs, coverage: fileCoverage(entries, text), reviewed: true })
         return
       }
-      // Unreviewed file: line-count only.
+      // Unreviewed file: line-count only, and only if it hasn't been counted
+      // yet or the file changed on disk since — the count doesn't depend on
+      // the attested record set, so there's nothing to invalidate here.
       const stat = fs.statSync(abs)
       const hit = this.covCache.get(abs)
-      if (!hit || hit.mtimeMs !== stat.mtimeMs || hit.gen !== this.gen) {
+      if (!hit || hit.mtimeMs !== stat.mtimeMs) {
         const coverage = countFileCoverage(abs)
-        this.covCache.set(abs, { mtimeMs: stat.mtimeMs, gen: this.gen, coverage, reviewed: false })
+        this.covCache.set(abs, { mtimeMs: stat.mtimeMs, coverage, reviewed: false })
       }
     } catch {
       // Deleted after existsSync, EACCES, EISDIR, store race, etc. Write a
       // sentinel entry so the file renders as excluded (no %, dim) instead
       // of getting stuck on a permanent pending spinner from a missing
       // cache entry.
-      this.covCache.set(abs, { mtimeMs: 0, gen: this.gen, coverage: null, reviewed: false })
+      this.covCache.set(abs, { mtimeMs: 0, coverage: null, reviewed: false })
     }
   }
 
@@ -167,7 +192,7 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     const out: TreeFile[] = []
     for (const p of this.fileList.get(root.rootDir) ?? []) {
       const cached = this.covCache.get(path.join(root.rootDir, p))
-      if (!cached || cached.gen !== this.gen) { out.push({ path: p, coverage: 'pending', reviewed: false }); continue }
+      if (!cached) { out.push({ path: p, coverage: 'pending', reviewed: false }); continue }
       out.push({ path: p, coverage: cached.coverage, reviewed: cached.reviewed })
     }
     return out
@@ -246,18 +271,11 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     return item
   }
 
-  private engineers(): { name: string; email: string; reviewCount: number; files: { sourcePath: string; count: number }[] }[] {
-    // Aggregate across roots by email.
-    const byEmail = new Map<string, { name: string; reviewCount: number; files: { sourcePath: string; count: number }[] }>()
-    for (const root of this.ctx.roots) {
-      for (const e of root.store.perEngineer()) {
-        const ex = byEmail.get(e.email)
-        if (!ex) byEmail.set(e.email, { name: e.name, reviewCount: e.reviewCount, files: [...e.files] })
-        else { ex.reviewCount += e.reviewCount; ex.files.push(...e.files) }
-      }
-    }
-    return [...byEmail.entries()].map(([email, v]) => ({ email, ...v }))
-      .sort((a, b) => b.reviewCount - a.reviewCount || a.name.localeCompare(b.name))
+  private engineers(): ReturnType<typeof aggregateEngineers<RootEntry>> {
+    // Aggregate across roots by email; each file entry carries the root it
+    // came from (see core/engineers.ts) so getChildren can open the correct
+    // root's file directly, instead of guessing it back afterwards.
+    return aggregateEngineers(this.ctx.roots, root => root.store.perEngineer())
   }
 
   getChildren(el?: Item): Item[] {
@@ -280,11 +298,10 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     if (el.t === 'engineer') {
       const eng = this.engineers().find(e => e.email === el.email)
       if (!eng) return []
-      // Map each engineer file back to the root that has a record for it.
-      return eng.files.map(f => {
-        const root = this.ctx.roots.find(r => this.isAttested(r, f.sourcePath)) ?? this.ctx.roots[0]!
-        return { t: 'engineerFile' as const, root, sourcePath: f.sourcePath, count: f.count }
-      })
+      // Each file entry already carries the root it came from (aggregateEngineers),
+      // so no need to guess it back — a same-named file in two roots yields two
+      // distinct rows here, each opening its own root's copy.
+      return eng.files.map(f => ({ t: 'engineerFile' as const, root: f.root, sourcePath: f.sourcePath, count: f.count }))
     }
     if (el.t === 'folder') {
       return [
