@@ -1,0 +1,69 @@
+{
+  "name": "vouch",
+  "displayName": "Vouch",
+  "description": "Human-authored review coverage: attest code you reviewed; attestations auto-dismiss when the code changes.",
+  "version": "0.0.1",
+  "publisher": "sanzhar",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/sanzhar/vouch" },
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "main": "./dist/extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "commands": [
+      { "command": "vouch.init", "title": "Vouch: Initialize in workspace" },
+      { "command": "vouch.selection", "title": "Vouch: Review selected lines" },
+      { "command": "vouch.function", "title": "Vouch: Review enclosing function" },
+      { "command": "vouch.class", "title": "Vouch: Review enclosing class" },
+      { "command": "vouch.file", "title": "Vouch: Review entire file" },
+      { "command": "vouch.reReview", "title": "Vouch: Re-review (after dismissal)" },
+      { "command": "vouch.unvouch", "title": "Vouch: Revoke my review" },
+      { "command": "vouch.showDiff", "title": "Vouch: Diff since my review" },
+      { "command": "vouch.openCommitOnWeb", "title": "Vouch: Open review commit on web" },
+      { "command": "vouch.openTimeline", "title": "Vouch: Open review timeline" },
+      { "command": "vouch.reattach", "title": "Vouch: Re-attach orphaned reviews" }
+    ],
+    "menus": {
+      "editor/context": [
+        { "submenu": "vouch.menu", "group": "1_modification@9" }
+      ],
+      "vouch.menu": [
+        { "command": "vouch.selection", "group": "a@1" },
+        { "command": "vouch.function", "group": "a@2" },
+        { "command": "vouch.class", "group": "a@3" },
+        { "command": "vouch.file", "group": "a@4" },
+        { "command": "vouch.reReview", "group": "b@1" },
+        { "command": "vouch.unvouch", "group": "b@2" },
+        { "command": "vouch.showDiff", "group": "c@1" }
+      ]
+    },
+    "submenus": [ { "id": "vouch.menu", "label": "Vouch" } ],
+    "viewsContainers": {
+      "activitybar": [ { "id": "vouch", "title": "Vouch", "icon": "media/reviewed.svg" } ]
+    },
+    "views": {
+      "vouch": [ { "id": "vouch.coverage", "name": "Review Coverage" } ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:int": "npm run build && tsc -p tsconfig.int.json && node out-int/test/vscode-int/runTest.js",
+    "package": "npm run build && vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^18.19.0",
+    "@types/vscode": "1.85.0",
+    "@vscode/test-electron": "^2.3.9",
+    "@vscode/vsce": "^2.24.0",
+    "esbuild": "^0.20.0",
+    "glob": "^10.3.0",
+    "mocha": "^10.3.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0"
+  }
+}

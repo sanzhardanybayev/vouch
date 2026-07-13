@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "outDir": "out-int", "rootDir": "." },
+  "include": ["src/**/*.ts", "test/vscode-int/**/*.ts"]
+}
