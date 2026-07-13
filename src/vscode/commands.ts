@@ -240,14 +240,24 @@ export function registerCommands(
       }
       const author = await resolveAuthor(extCtx, root.rootDir)
       if (!author) return
-      const state = root.store.stateFor(oldPath)!
+      const state = root.store.stateFor(oldPath)
+      if (!state) return
       const { copies, tombstones } = buildReattachLines(
         state.current, newSourcePath, () => randomUUID(), new Date().toISOString(), author)
-      for (const c of copies) {
-        await appendLine(root.rootDir, newSourcePath, authorSlug(c.author.email), c)
-      }
-      for (const t of tombstones) {
-        await appendLine(root.rootDir, oldPath, authorSlug(author.email), t)
+      try {
+        // Tombstones to the OLD path first, then copies to the new path: if the
+        // process dies mid-loop, the worst case is reviews are revoked but not
+        // yet re-created (temporarily missing coverage) rather than live in
+        // both places at once (duplicated, falsely-"reviewed" coverage).
+        for (const t of tombstones) {
+          await appendLine(root.rootDir, oldPath, authorSlug(author.email), t)
+        }
+        for (const c of copies) {
+          await appendLine(root.rootDir, newSourcePath, authorSlug(c.author.email), c)
+        }
+      } catch (err) {
+        void vscode.window.showErrorMessage(`Vouch: re-attach failed — ${String(err)}`)
+        return
       }
       await ctx.reload()
       refresh()
