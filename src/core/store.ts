@@ -4,6 +4,13 @@ import { dedupeById, parseJsonl, resolveChains, type ChainState } from './record
 import { sourcePathOfShard } from './paths'
 import type { VouchLine } from './types'
 
+export interface EngineerSummary {
+  name: string
+  email: string
+  reviewCount: number
+  files: { sourcePath: string; count: number }[]
+}
+
 export class ReviewStore {
   private bySource = new Map<string, ChainState>()
   corruptLines = 0
@@ -57,6 +64,28 @@ export class ReviewStore {
       }
     }
     return { records, perAuthor }
+  }
+
+  perEngineer(): EngineerSummary[] {
+    // email -> { name, total, perFile: Map<sourcePath, count> }
+    const byEmail = new Map<string, { name: string; total: number; perFile: Map<string, number> }>()
+    for (const [sourcePath, state] of this.bySource) {
+      for (const r of state.current) {
+        let e = byEmail.get(r.author.email)
+        if (!e) { e = { name: r.author.name, total: 0, perFile: new Map() }; byEmail.set(r.author.email, e) }
+        e.total++
+        e.perFile.set(sourcePath, (e.perFile.get(sourcePath) ?? 0) + 1)
+      }
+    }
+    const out: EngineerSummary[] = []
+    for (const [email, e] of byEmail) {
+      const files = [...e.perFile.entries()]
+        .map(([sourcePath, count]) => ({ sourcePath, count }))
+        .sort((a, b) => b.count - a.count || a.sourcePath.localeCompare(b.sourcePath))
+      out.push({ name: e.name, email, reviewCount: e.total, files })
+    }
+    out.sort((a, b) => b.reviewCount - a.reviewCount || a.name.localeCompare(b.name))
+    return out
   }
 }
 
