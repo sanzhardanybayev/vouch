@@ -43,3 +43,10 @@ describe('rollup / pct', () => {
     expect(rollup([null, null])).toBeNull()
   })
 })
+
+describe('rollup with unreviewed entries (v1.1)', () => {
+  it('sums {0,N} unreviewed files into the denominator', () => {
+    expect(rollup([{ reviewedLines: 3, totalLines: 3 }, { reviewedLines: 0, totalLines: 7 }]))
+      .toEqual({ reviewedLines: 3, totalLines: 10 })
+  })
+})

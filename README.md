@@ -71,6 +71,27 @@ When a symbol-anchored review's code moves (e.g. the function is relocated but n
 Vouch follows it via the language server's symbol provider first, falling back to a
 text-based scan, so the icon stays attached to the code rather than a stale line number.
 
+## Coverage, CodeLens, and Reviewers (v1.1)
+
+- **Coverage is now honest end-to-end.** The percentage on the sidebar header and on every
+  folder is reviewed lines ÷ lines across *every* git-tracked file in the folder, not just the
+  ones someone happened to review — an untouched file still adds its full line count to the
+  denominator. That means a repo with a hundred files and one small reviewed selection shows a
+  low, honest percentage instead of 100%. Binary and empty files are excluded from the ratio
+  entirely (they can be neither reviewed nor unreviewed), and files with no review record stay
+  visually dim in the tree while still counting fully against their folder's total.
+- **A CodeLens sits above reviewed code.** Any line where a review record resolves gets an
+  inline `✓ Reviewed by <name>, <time>` lens directly above it, with **Re-review** and **Diff**
+  lenses alongside — click the reviewer text to open the review **Timeline** webview, click
+  **Re-review** to re-attest, or **Diff** to see what changed since the review. Once the
+  underlying text changes, the lens flips to `⚠ Dismissed (changed since review) — re-review`.
+  The whole feature is controlled by the `vouch.codeLens.enabled` setting, on by default —
+  toggle it off if you'd rather rely on the gutter icon and hover alone.
+- **The Vouch panel has a Reviewers section.** Below the coverage tree, a **Reviewers** node
+  lists every engineer with an active review, each showing their review count and how many
+  files they've touched (`12 reviews · 5 files`). Expand an engineer to see the individual
+  files they reviewed; click one to open it.
+
 ## Storage model
 
 Review records live under a `.vouch/` folder at the git repository root and are meant to be

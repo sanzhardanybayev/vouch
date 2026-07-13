@@ -1,6 +1,6 @@
 import { rollup, pct, type FileCoverage } from './coverage'
 
-export interface TreeFile { path: string; coverage: FileCoverage | null | 'pending' }
+export interface TreeFile { path: string; coverage: FileCoverage | null | 'pending'; reviewed: boolean }
 export interface TreeFolder {
   name: string
   path: string
@@ -49,7 +49,7 @@ export interface HeaderStats {
   workspacePct: number | null
   pending: boolean
   records: number
-  attested: number
+  reviewedFiles: number
   totalFiles: number
   perAuthor: { name: string; current: number }[]
 }
@@ -59,15 +59,15 @@ export function headerStats(
   counts: { records: number; perAuthor: Map<string, { name: string; current: number }> },
 ): HeaderStats {
   const pending = files.some(f => f.coverage === 'pending')
-  const attestedCovs = files
+  const covs = files
     .map(f => f.coverage)
     .filter((c): c is FileCoverage => c !== null && c !== 'pending')
-  const total = rollup(attestedCovs)
+  const total = rollup(covs)
   return {
     workspacePct: total ? pct(total) : null,
     pending,
     records: counts.records,
-    attested: files.filter(f => f.coverage !== null).length,
+    reviewedFiles: files.filter(f => f.reviewed).length,
     totalFiles,
     perAuthor: [...counts.perAuthor.values()],
   }

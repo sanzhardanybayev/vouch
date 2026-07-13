@@ -6,6 +6,7 @@ import { Gutter } from './gutter'
 import { registerHovers } from './hovers'
 import { VouchBaselineProvider } from './diff'
 import { CoverageTree } from './sidebar'
+import { VouchCodeLensProvider } from './codelens'
 
 let ctx: VouchContext | undefined
 // Reassigned below once the status pipeline is wired up; kept as a
@@ -14,7 +15,7 @@ let ctx: VouchContext | undefined
 let refresh: () => void = () => {}
 
 export async function activate(context: vscode.ExtensionContext): Promise<{
-  getTestApi: () => { context: VouchContext; pipeline: StatusPipeline }
+  getTestApi: () => { context: VouchContext; pipeline: StatusPipeline; coverageTree: CoverageTree }
 }> {
   ctx = await VouchContext.create()
   context.subscriptions.push({ dispose: () => ctx?.dispose() })
@@ -56,7 +57,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
   const tree = new CoverageTree(ctx, pipeline, context.subscriptions)
   context.subscriptions.push(vscode.window.registerTreeDataProvider('vouch.coverage', tree))
 
-  return { getTestApi: () => ({ context: ctx!, pipeline }) }
+  const codeLensProvider = new VouchCodeLensProvider(pipeline, context.subscriptions)
+  context.subscriptions.push(
+    vscode.languages.registerCodeLensProvider({ scheme: 'file' }, codeLensProvider))
+
+  return { getTestApi: () => ({ context: ctx!, pipeline, coverageTree: tree }) }
 }
 
 export function deactivate(): void {}

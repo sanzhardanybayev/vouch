@@ -2,6 +2,8 @@ import * as assert from 'node:assert'
 import * as vscode from 'vscode'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
+import { buildTree } from '../../../src/core/treemodel'
+import { pct } from '../../../src/core/coverage'
 
 describe('activation', () => {
   it('activates and exposes the test api', async () => {
@@ -94,5 +96,76 @@ describe('sidebar', () => {
     // The command just focuses the view; real assertion is via the test api:
     const api = (await vscode.extensions.getExtension('sanzhar.vouch')!.activate()).getTestApi()
     assert.ok(api.context.roots.length >= 1)
+  })
+})
+
+describe('v1.1 honest coverage + reviewers', () => {
+  it('sidebar exposes engineers and wires real coverage end-to-end', async () => {
+    const api = (await vscode.extensions.getExtension('sanzhar.vouch')!.activate()).getTestApi()
+    // Let the background queue settle (it now counts every tracked file).
+    await new Promise(r => setTimeout(r, 1500))
+    const root = api.context.roots[0]!
+    // perEngineer surfaces the fixture author.
+    const eng = root.store.perEngineer()
+    assert.ok(eng.length >= 1, 'at least one engineer')
+    assert.ok(eng.some((e: { email: string }) => e.email === 'int@test.dev'))
+
+    // Prove the WIRING, not just that engineers exist: getTestSnapshot() runs
+    // the real treeFiles -> buildTree -> headerStats pipeline the sidebar
+    // uses internally, over the live fixture (calc.ts already carries an
+    // attested selection review for lines 1-3 out of its 7, from the
+    // 'vouch.selection' test above).
+    const { header } = api.coverageTree.getTestSnapshot()
+    assert.ok(header.totalFiles >= 1, 'at least one tracked file')
+    assert.ok(header.reviewedFiles >= 1, 'at least one reviewed file')
+    assert.ok(header.reviewedFiles <= header.totalFiles, 'reviewed cannot exceed total')
+    assert.strictEqual(typeof header.workspacePct, 'number', 'workspacePct is a finite number once reviews exist')
+    assert.ok(header.workspacePct! >= 0 && header.workspacePct! <= 100, 'workspacePct in [0,100]')
+
+    // Belt-and-suspenders: the pure math for a hand-built mixed
+    // reviewed/unreviewed tree must be < 100%. The fixture here is a single
+    // small file so it can't itself prove "not everything is 100%"; this
+    // confirms the same buildTree/pct machinery the wiring above relies on
+    // does the honest thing when unreviewed files are present (already
+    // covered in test/core/treemodel.test.ts — repeated here so this
+    // integration test isn't solely dependent on fixture contents staying
+    // partially-reviewed).
+    const mixed = buildTree([
+      { path: 'a.ts', coverage: { reviewedLines: 5, totalLines: 10 }, reviewed: true },
+      { path: 'b.ts', coverage: { reviewedLines: 0, totalLines: 10 }, reviewed: false },
+    ])
+    assert.notStrictEqual(mixed.coverage, null)
+    assert.notStrictEqual(mixed.coverage, 'pending')
+    const mixedCoverage = mixed.coverage as { reviewedLines: number; totalLines: number }
+    assert.ok(pct(mixedCoverage) < 100)
+  })
+})
+
+describe('v1.1 CodeLens', () => {
+  it('provides a status lens on the reviewed range and none when disabled', async () => {
+    const ws = vscode.workspace.workspaceFolders![0]!.uri.fsPath
+    const doc = await vscode.workspace.openTextDocument(path.join(ws, 'src/calc.ts'))
+    await vscode.window.showTextDocument(doc)
+
+    const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>(
+      'vscode.executeCodeLensProvider', doc.uri)
+    const vouchLenses = (lenses ?? []).filter(l =>
+      typeof l.command?.title === 'string' &&
+      (l.command.title.includes('Reviewed') || l.command.title.includes('Dismissed')
+        || l.command.title === 'Re-review' || l.command.title === 'Diff'))
+    assert.ok(vouchLenses.length >= 1, 'at least one vouch codelens')
+
+    await vscode.workspace.getConfiguration('vouch').update(
+      'codeLens.enabled', false, vscode.ConfigurationTarget.Global)
+    // Give the provider a tick to observe the config change.
+    await new Promise(r => setTimeout(r, 200))
+    const lenses2 = await vscode.commands.executeCommand<vscode.CodeLens[]>(
+      'vscode.executeCodeLensProvider', doc.uri)
+    const vouch2 = (lenses2 ?? []).filter(l =>
+      typeof l.command?.title === 'string' &&
+      (l.command.title.includes('Reviewed') || l.command.title.includes('Dismissed')))
+    assert.strictEqual(vouch2.length, 0, 'no vouch codelens when disabled')
+    await vscode.workspace.getConfiguration('vouch').update(
+      'codeLens.enabled', true, vscode.ConfigurationTarget.Global)
   })
 })

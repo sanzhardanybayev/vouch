@@ -67,3 +67,32 @@ describe('ReviewStore', () => {
     expect(s.orphans(p => p === 'src/here.ts')).toEqual(['src/gone.ts'])
   })
 })
+
+describe('perEngineer (v1.1)', () => {
+  it('aggregates current records by author across sources', async () => {
+    await writeShard('src/a.ts', SAN.email, [rec('r1'), rec('r2', SAN, { range: [5, 6] })])
+    await writeShard('src/b.ts', SAN.email, [rec('r3')])
+    await writeShard('src/a.ts', BOB.email, [rec('r4', BOB, { range: [9, 10] })])
+    const s = new ReviewStore(dir)
+    await s.load()
+    const eng = s.perEngineer()
+    expect(eng.map(e => e.email)).toEqual([SAN.email, BOB.email]) // San 3 > Bob 1
+    const san = eng[0]!
+    expect(san.reviewCount).toBe(3)
+    expect(san.files).toEqual([
+      { sourcePath: 'src/a.ts', count: 2 },
+      { sourcePath: 'src/b.ts', count: 1 },
+    ])
+    expect(eng[1]!).toMatchObject({ email: BOB.email, reviewCount: 1 })
+  })
+
+  it('excludes revoked chains', async () => {
+    await writeShard('src/a.ts', SAN.email, [
+      rec('r1'),
+      { id: 't1', author: SAN, createdAt: '2026-01-02T00:00:00Z', revokes: 'r1', reason: 'unvouch' },
+    ])
+    const s = new ReviewStore(dir)
+    await s.load()
+    expect(s.perEngineer()).toEqual([])
+  })
+})
