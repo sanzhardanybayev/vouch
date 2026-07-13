@@ -7,6 +7,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
   getTestApi: () => { context: VouchContext }
 }> {
   ctx = await VouchContext.create()
+  context.subscriptions.push({ dispose: () => ctx?.dispose() })
 
   const watcher = vscode.workspace.createFileSystemWatcher('**/.vouch/reviews/**/*.jsonl')
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -18,6 +19,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
   watcher.onDidChange(scheduleReload)
   watcher.onDidDelete(scheduleReload)
   context.subscriptions.push(watcher)
+  context.subscriptions.push({ dispose: () => { if (timer) clearTimeout(timer) } })
 
   return { getTestApi: () => ({ context: ctx! }) }
 }
