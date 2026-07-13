@@ -7,6 +7,7 @@ import { countLines } from '../core/text'
 import { isInsideRoot } from '../core/paths'
 import { buildTree, headerStats, type TreeFile, type TreeFolder } from '../core/treemodel'
 import { aggregateEngineers } from '../core/engineers'
+import { shouldRequeue } from '../core/requeue'
 import type { VouchContext, RootEntry } from './context'
 import type { StatusPipeline } from './pipeline'
 import { lsFiles } from './gitinfo'
@@ -92,16 +93,21 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     for (const key of this.covCache.keys()) {
       if (!validAbs.has(key)) this.covCache.delete(key)
     }
-    // Requeue only: attested files (the record set may have changed — an
+    // Requeue: attested files (the record set may have changed — an
     // attest/dismiss/revoke — even when the file's own text didn't, so these
-    // always need a recompute) and files with no cache entry yet (never
-    // counted). Already-counted unreviewed files didn't change, so leave
-    // them cached — this is what keeps a single attest/dismiss from
-    // requeuing the whole tree.
+    // always need a recompute), files with no cache entry yet (never
+    // counted), and files cached as reviewed (a file's *last* active review
+    // being dismissed/revoked flips it attested -> unattested by touching
+    // only `.vouch/reviews/*.jsonl`, never the source file's mtime — so a
+    // stale reviewed:true entry must be re-evaluated even though neither the
+    // "attested" nor the "no cache entry" condition catches it on their
+    // own). See core/requeue.ts for the pure decision. Already-counted,
+    // unreviewed, unattested files are the only ones left cached — this is
+    // what keeps a single attest/dismiss from requeuing the whole tree.
     this.queue = this.ctx.roots.flatMap(root =>
       (this.fileList.get(root.rootDir) ?? [])
         .filter(p => fs.existsSync(path.join(root.rootDir, p)))
-        .filter(p => this.isAttested(root, p) || !this.covCache.has(path.join(root.rootDir, p)))
+        .filter(p => shouldRequeue(this.isAttested(root, p), this.covCache.get(path.join(root.rootDir, p))))
         .map(sourcePath => ({ root, sourcePath })))
     this.runQueue()
     this.emitter.fire(undefined)
@@ -171,11 +177,17 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
         return
       }
       // Unreviewed file: line-count only, and only if it hasn't been counted
-      // yet or the file changed on disk since — the count doesn't depend on
-      // the attested record set, so there's nothing to invalidate here.
+      // yet, the file changed on disk since, or the cached entry still
+      // claims reviewed:true. That last condition matters here too, not just
+      // in refresh()'s requeue filter: a file can reach this branch via
+      // onPipelineUpdate (which bypasses the requeue filter entirely) or
+      // simply race a stale entry into the queue, and dismissing/revoking a
+      // file's last review never touches the source file's mtime — so
+      // without this, a stale reviewed:true entry would survive the
+      // mtime-guard forever instead of recomputing to unreviewed {0, N}.
       const stat = fs.statSync(abs)
       const hit = this.covCache.get(abs)
-      if (!hit || hit.mtimeMs !== stat.mtimeMs) {
+      if (!hit || hit.mtimeMs !== stat.mtimeMs || hit.reviewed) {
         const coverage = countFileCoverage(abs)
         this.covCache.set(abs, { mtimeMs: stat.mtimeMs, coverage, reviewed: false })
       }
