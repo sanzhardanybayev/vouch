@@ -5,6 +5,7 @@
   "version": "0.0.1",
   "publisher": "sanzhar",
   "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/sanzhar/vouch" },
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Other"],
   "main": "./dist/extension.js",
