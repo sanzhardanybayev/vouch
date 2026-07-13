@@ -31,7 +31,9 @@ export async function isDirty(root: string, sourcePath: string): Promise<boolean
 export async function showAtCommit(
   root: string, commit: string, sourcePath: string,
 ): Promise<string | null> {
-  return git(['show', `${commit}:${sourcePath}`], root, { raw: true })
+  // Guard against option injection: commit values from shared .vouch/ records are untrusted
+  if (commit.startsWith('-')) return null
+  return git(['show', '--end-of-options', `${commit}:${sourcePath}`], root, { raw: true })
 }
 
 export async function remoteUrl(root: string): Promise<string | null> {
