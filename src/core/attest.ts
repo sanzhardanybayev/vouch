@@ -1,6 +1,6 @@
 import { hashRangeOfText, type Resolution } from './anchor'
 import { normalizeEol, sha256 } from './text'
-import type { Author, RecordKind, ReviewRecord } from './types'
+import type { Author, RecordKind, ReviewRecord, Tombstone } from './types'
 
 export function overlaps(a: [number, number], b: [number, number]): boolean {
   return a[0] <= b[1] && b[0] <= a[1]
@@ -51,4 +51,18 @@ export function buildRecord(params: {
   if (params.comment) rec.comment = params.comment
   if (superseded.length > 0) rec.supersedes = superseded
   return rec
+}
+
+export function buildReattachLines(
+  records: ReviewRecord[], newSourcePath: string,
+  idGen: () => string, nowIso: string, reattachedBy: Author,
+): { copies: ReviewRecord[]; tombstones: Tombstone[] } {
+  const copies: ReviewRecord[] = []
+  const tombstones: Tombstone[] = []
+  for (const r of records) {
+    copies.push({ ...r, id: idGen(), movedFrom: r.id, supersedes: undefined })
+    tombstones.push({ id: idGen(), author: reattachedBy, createdAt: nowIso,
+      revokes: r.id, reason: 'moved', movedTo: newSourcePath })
+  }
+  return { copies, tombstones }
 }

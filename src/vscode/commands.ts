@@ -1,7 +1,9 @@
 import * as vscode from 'vscode'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { buildRecord, overlaps } from '../core/attest'
-import { enclosingSymbol, resolveRecord } from '../core/anchor'
+import { buildRecord, buildReattachLines, overlaps } from '../core/attest'
+import { enclosingSymbol, resolveRecord, resolveSymbolPath } from '../core/anchor'
 import { authorSlug } from '../core/paths'
 import { appendLine, initVouch } from '../core/writer'
 import type { Author, RecordKind, ReviewRecord, Tombstone } from '../core/types'
@@ -175,5 +177,82 @@ export function registerCommands(
     const url = remote ? commitUrl(remote, found.record.commit) : null
     if (!url) { void vscode.window.showInformationMessage('Vouch: no recognizable git remote.'); return }
     void vscode.env.openExternal(vscode.Uri.parse(url))
+  })
+
+  reg2('vouch.reReview', async (recordId?: string) => {
+    const st = await editorState(ctx)
+    if (!st) return
+    const { editor, rootDir, sourcePath } = st
+    const author = await resolveAuthor(extCtx, rootDir)
+    if (!author) return
+    const docText = editor.document.getText()
+    const resolved = currentResolved(ctx, rootDir, sourcePath, docText)
+    const line = editor.selection.active.line + 1
+    const target = recordId
+      ? resolved.find(e => e.record.id === recordId)
+      : resolved.find(e => e.record.author.email === author.email &&
+          e.res.status === 'dismissed' &&
+          (e.record.kind === 'file' || overlaps(e.res.effectiveRange, [line, line])))
+    if (!target) {
+      void vscode.window.showInformationMessage('Vouch: no dismissed review of yours here.')
+      return
+    }
+
+    if (target.record.kind === 'file') {
+      await vscode.commands.executeCommand('vouch.file'); return
+    }
+    if (target.record.symbol) {
+      const symbols = await documentSymbols(editor.document.uri)
+      const node = resolveSymbolPath(symbols, target.record.symbol)
+      if (node) {
+        editor.selection = new vscode.Selection(node.range[0] - 1, 0, node.range[1] - 1, 0)
+        await vscode.commands.executeCommand(
+          target.record.kind === 'class' ? 'vouch.class' : 'vouch.function')
+        return
+      }
+    }
+    // free-form (or symbol gone): preselect displayed range, ask user to confirm/adjust
+    const [s, e] = target.res.effectiveRange
+    editor.selection = new vscode.Selection(s - 1, 0, e - 1, 0)
+    editor.revealRange(new vscode.Range(s - 1, 0, e - 1, 0))
+    const choice = await vscode.window.showInformationMessage(
+      'Vouch: confirm or adjust the selection, then re-review.', 'Re-review selection')
+    if (choice === 'Re-review selection') {
+      await vscode.commands.executeCommand('vouch.selection')
+    }
+  })
+
+  reg('vouch.reattach', async () => {
+    for (const root of ctx.roots) {
+      const orphans = root.store.orphans(p => fs.existsSync(path.join(root.rootDir, p)))
+      if (orphans.length === 0) continue
+      const oldPath = await vscode.window.showQuickPick(orphans,
+        { placeHolder: 'Vouch: orphaned reviews — pick the old path to re-attach' })
+      if (!oldPath) return
+      const picked = await vscode.window.showOpenDialog({
+        canSelectMany: false, defaultUri: vscode.Uri.file(root.rootDir),
+        openLabel: 'Re-attach reviews to this file' })
+      const newUri = picked?.[0]
+      if (!newUri) return
+      const newSourcePath = ctx.sourcePathOf(newUri)
+      if (!newSourcePath) {
+        void vscode.window.showWarningMessage('Vouch: target must be inside the workspace.'); return
+      }
+      const author = await resolveAuthor(extCtx, root.rootDir)
+      if (!author) return
+      const state = root.store.stateFor(oldPath)!
+      const { copies, tombstones } = buildReattachLines(
+        state.current, newSourcePath, () => randomUUID(), new Date().toISOString(), author)
+      for (const c of copies) {
+        await appendLine(root.rootDir, newSourcePath, authorSlug(c.author.email), c)
+      }
+      for (const t of tombstones) {
+        await appendLine(root.rootDir, oldPath, authorSlug(author.email), t)
+      }
+      await ctx.reload()
+      refresh()
+      return
+    }
+    void vscode.window.showInformationMessage('Vouch: no orphaned reviews.')
   })
 }
