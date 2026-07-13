@@ -71,3 +71,17 @@ describe('status pipeline', () => {
     await vscode.commands.executeCommand('workbench.action.files.revert') // restore for later tests
   })
 })
+
+describe('range hover', () => {
+  it('returns vouch markdown for an attested line', async () => {
+    const ws = vscode.workspace.workspaceFolders![0]!.uri.fsPath
+    const doc = await vscode.workspace.openTextDocument(path.join(ws, 'src/calc.ts'))
+    await vscode.window.showTextDocument(doc)
+    const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+      'vscode.executeHoverProvider', doc.uri, new vscode.Position(0, 2))
+    const all = hovers.flatMap(h => h.contents)
+      .map(c => typeof c === 'string' ? c : (c as vscode.MarkdownString).value).join('\n')
+    assert.match(all, /reviewed|dismissed/)
+    assert.match(all, /Vouch|timeline/i)
+  })
+})

@@ -3,6 +3,7 @@ import { VouchContext } from './context'
 import { registerCommands } from './commands'
 import { StatusPipeline } from './pipeline'
 import { Gutter } from './gutter'
+import { registerHovers } from './hovers'
 
 let ctx: VouchContext | undefined
 // Reassigned below once the status pipeline is wired up; kept as a
@@ -33,6 +34,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
   const pipeline = new StatusPipeline(ctx, context.subscriptions)
   const gutter = new Gutter(context.extensionUri)
   context.subscriptions.push(gutter)
+  registerHovers(context, ctx, pipeline)
 
   const applyTo = async (editor: vscode.TextEditor): Promise<void> => {
     gutter.apply(editor, await pipeline.statusFor(editor.document))
