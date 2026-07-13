@@ -2,6 +2,8 @@ import * as assert from 'node:assert'
 import * as vscode from 'vscode'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
+import { buildTree } from '../../../src/core/treemodel'
+import { pct } from '../../../src/core/coverage'
 
 describe('activation', () => {
   it('activates and exposes the test api', async () => {
@@ -98,7 +100,7 @@ describe('sidebar', () => {
 })
 
 describe('v1.1 honest coverage + reviewers', () => {
-  it('sidebar exposes engineers and counts all files in coverage', async () => {
+  it('sidebar exposes engineers and wires real coverage end-to-end', async () => {
     const api = (await vscode.extensions.getExtension('sanzhar.vouch')!.activate()).getTestApi()
     // Let the background queue settle (it now counts every tracked file).
     await new Promise(r => setTimeout(r, 1500))
@@ -107,11 +109,35 @@ describe('v1.1 honest coverage + reviewers', () => {
     const eng = root.store.perEngineer()
     assert.ok(eng.length >= 1, 'at least one engineer')
     assert.ok(eng.some((e: { email: string }) => e.email === 'int@test.dev'))
-    // headerStats over the full file set: workspacePct is a real number, not 100
-    // (calc.ts is a small slice of the fixture's total tracked lines) OR — if the
-    // fixture is tiny and calc.ts dominates — at least a finite number ≤ 100.
-    // We assert it is a number and reviewedFiles < totalFiles (there are other files).
-    // (Exact % depends on fixture contents; keep the assertion robust.)
+
+    // Prove the WIRING, not just that engineers exist: getTestSnapshot() runs
+    // the real treeFiles -> buildTree -> headerStats pipeline the sidebar
+    // uses internally, over the live fixture (calc.ts already carries an
+    // attested selection review for lines 1-3 out of its 7, from the
+    // 'vouch.selection' test above).
+    const { header } = api.coverageTree.getTestSnapshot()
+    assert.ok(header.totalFiles >= 1, 'at least one tracked file')
+    assert.ok(header.reviewedFiles >= 1, 'at least one reviewed file')
+    assert.ok(header.reviewedFiles <= header.totalFiles, 'reviewed cannot exceed total')
+    assert.strictEqual(typeof header.workspacePct, 'number', 'workspacePct is a finite number once reviews exist')
+    assert.ok(header.workspacePct! >= 0 && header.workspacePct! <= 100, 'workspacePct in [0,100]')
+
+    // Belt-and-suspenders: the pure math for a hand-built mixed
+    // reviewed/unreviewed tree must be < 100%. The fixture here is a single
+    // small file so it can't itself prove "not everything is 100%"; this
+    // confirms the same buildTree/pct machinery the wiring above relies on
+    // does the honest thing when unreviewed files are present (already
+    // covered in test/core/treemodel.test.ts — repeated here so this
+    // integration test isn't solely dependent on fixture contents staying
+    // partially-reviewed).
+    const mixed = buildTree([
+      { path: 'a.ts', coverage: { reviewedLines: 5, totalLines: 10 }, reviewed: true },
+      { path: 'b.ts', coverage: { reviewedLines: 0, totalLines: 10 }, reviewed: false },
+    ])
+    assert.notStrictEqual(mixed.coverage, null)
+    assert.notStrictEqual(mixed.coverage, 'pending')
+    const mixedCoverage = mixed.coverage as { reviewedLines: number; totalLines: number }
+    assert.ok(pct(mixedCoverage) < 100)
   })
 })
 

@@ -15,7 +15,7 @@ let ctx: VouchContext | undefined
 let refresh: () => void = () => {}
 
 export async function activate(context: vscode.ExtensionContext): Promise<{
-  getTestApi: () => { context: VouchContext; pipeline: StatusPipeline }
+  getTestApi: () => { context: VouchContext; pipeline: StatusPipeline; coverageTree: CoverageTree }
 }> {
   ctx = await VouchContext.create()
   context.subscriptions.push({ dispose: () => ctx?.dispose() })
@@ -61,7 +61,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
   context.subscriptions.push(
     vscode.languages.registerCodeLensProvider({ scheme: 'file' }, codeLensProvider))
 
-  return { getTestApi: () => ({ context: ctx!, pipeline }) }
+  return { getTestApi: () => ({ context: ctx!, pipeline, coverageTree: tree }) }
 }
 
 export function deactivate(): void {}

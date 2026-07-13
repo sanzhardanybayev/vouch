@@ -3,9 +3,9 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { resolveRecord } from '../core/anchor'
 import { fileCoverage, pct, type FileCoverage } from '../core/coverage'
-import { countLines } from '../core/text'
+import { textFileCoverage } from '../core/linecount'
 import { isInsideRoot } from '../core/paths'
-import { buildTree, headerStats, type TreeFile, type TreeFolder } from '../core/treemodel'
+import { buildTree, headerStats, type HeaderStats, type TreeFile, type TreeFolder } from '../core/treemodel'
 import { aggregateEngineers } from '../core/engineers'
 import { shouldRequeue } from '../core/requeue'
 import type { VouchContext, RootEntry } from './context'
@@ -54,12 +54,14 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     const fsWatcher = vscode.workspace.createFileSystemWatcher('**/*')
     const scheduleFileListReload = (): void => {
       if (this.fsWatchTimer) clearTimeout(this.fsWatchTimer)
-      this.fsWatchTimer = setTimeout(() => { void this.loadFileLists().then(() => this.refresh()) }, 300)
+      this.fsWatchTimer = setTimeout(() => {
+        void this.loadFileLists().then(() => this.refresh()).catch(() => {})
+      }, 300)
     }
     fsWatcher.onDidCreate(scheduleFileListReload)
     fsWatcher.onDidDelete(scheduleFileListReload)
     subscriptions.push(fsWatcher, { dispose: () => { if (this.fsWatchTimer) clearTimeout(this.fsWatchTimer) } })
-    void this.loadFileLists().then(() => this.refresh())
+    void this.loadFileLists().then(() => this.refresh()).catch(() => {})
   }
 
   private async loadFileLists(): Promise<void> {
@@ -210,21 +212,36 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     return out
   }
 
+  // Test-only escape hatch: expose the same treeFiles -> buildTree ->
+  // headerStats pipeline getTreeItem/getChildren use internally, so an
+  // integration test can assert real coverage facts about the live tree
+  // instead of only reaching in through vscode UI commands.
+  getTestSnapshot(): { header: HeaderStats; roots: { rootDir: string; tree: TreeFolder }[] } {
+    return {
+      header: this.computeHeaderStats(),
+      roots: this.ctx.roots.map(root => ({ rootDir: root.rootDir, tree: buildTree(this.treeFiles(root)) })),
+    }
+  }
+
+  private computeHeaderStats(): HeaderStats {
+    const files = this.ctx.roots.flatMap(root => this.treeFiles(root))
+    const counts = this.ctx.roots.reduce((acc, root) => {
+      const c = root.store.counts()
+      acc.records += c.records
+      for (const [email, entry] of c.perAuthor) {
+        const ex = acc.perAuthor.get(email)
+        acc.perAuthor.set(email, ex
+          ? { name: entry.name, current: ex.current + entry.current }
+          : { name: entry.name, current: entry.current })
+      }
+      return acc
+    }, { records: 0, perAuthor: new Map<string, { name: string; current: number }>() })
+    return headerStats(files, files.length, counts)
+  }
+
   getTreeItem(el: Item): vscode.TreeItem {
     if (el.t === 'header') {
-      const files = this.ctx.roots.flatMap(root => this.treeFiles(root))
-      const counts = this.ctx.roots.reduce((acc, root) => {
-        const c = root.store.counts()
-        acc.records += c.records
-        for (const [email, entry] of c.perAuthor) {
-          const ex = acc.perAuthor.get(email)
-          acc.perAuthor.set(email, ex
-            ? { name: entry.name, current: ex.current + entry.current }
-            : { name: entry.name, current: entry.current })
-        }
-        return acc
-      }, { records: 0, perAuthor: new Map<string, { name: string; current: number }>() })
-      const h = headerStats(files, files.length, counts)
+      const h = this.computeHeaderStats()
       const item = new vscode.TreeItem('Coverage', vscode.TreeItemCollapsibleState.None)
       item.description = h.pending ? '…'
         : h.workspacePct === null ? 'no reviews yet'
@@ -333,12 +350,25 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
 // Line-count a file for the coverage denominator. Returns {0, N} for a text
 // file with N lines, or null for binary/empty/unreadable (excluded from
 // coverage entirely, never counted as 0-reviewed).
+//
+// Reads only the first 8192 bytes to check for a NUL byte first — a binary
+// file (image, archive, etc.) is rejected on that prefix alone, so we never
+// buffer the rest of a large binary just to throw it away. Only once the
+// prefix is clean do we read the whole file (still required to count lines
+// for a large text file); the actual binary/empty/line-count decision is
+// delegated to the pure textFileCoverage so it stays unit-testable without fs.
 function countFileCoverage(abs: string): FileCoverage | null {
-  let buf: Buffer
-  try { buf = fs.readFileSync(abs) } catch { return null }
-  const slice = buf.subarray(0, 8192)
-  if (slice.includes(0)) return null // NUL byte → binary
-  const totalLines = countLines(buf.toString('utf8'))
-  if (totalLines === 0) return null
-  return { reviewedLines: 0, totalLines }
+  try {
+    const fd = fs.openSync(abs, 'r')
+    try {
+      const prefix = Buffer.alloc(8192)
+      const bytesRead = fs.readSync(fd, prefix, 0, prefix.length, 0)
+      if (prefix.subarray(0, bytesRead).includes(0)) return null // NUL byte → binary
+    } finally {
+      fs.closeSync(fd)
+    }
+    return textFileCoverage(fs.readFileSync(abs))
+  } catch {
+    return null
+  }
 }
