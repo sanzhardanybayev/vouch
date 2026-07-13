@@ -1,5 +1,19 @@
 import { describe, it, expect } from 'vitest'
-import { authorSlug, shardPath, sourcePathOfShard } from '../../src/core/paths'
+import { authorSlug, isInsideRoot, shardPath, sourcePathOfShard } from '../../src/core/paths'
+
+describe('isInsideRoot', () => {
+  it('accepts the root itself and nested paths', () => {
+    expect(isInsideRoot('/repo', '/repo')).toBe(true)
+    expect(isInsideRoot('/repo', '/repo/src/a.ts')).toBe(true)
+  })
+  it('rejects a sibling that merely shares the root as a string prefix', () => {
+    expect(isInsideRoot('/repo', '/repository/foo')).toBe(false)
+  })
+  it('rejects parents and unrelated paths', () => {
+    expect(isInsideRoot('/repo', '/')).toBe(false)
+    expect(isInsideRoot('/repo', '/other')).toBe(false)
+  })
+})
 
 describe('authorSlug', () => {
   it('is 8 hex chars, case/whitespace-insensitive on email', () => {

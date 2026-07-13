@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { resolveRecord } from '../core/anchor'
 import { fileCoverage, pct, type FileCoverage } from '../core/coverage'
+import { isInsideRoot } from '../core/paths'
 import { buildTree, headerStats, type TreeFile, type TreeFolder } from '../core/treemodel'
 import type { VouchContext, RootEntry } from './context'
 import type { StatusPipeline } from './pipeline'
@@ -32,7 +33,7 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
   ) {
     subscriptions.push(
       ctx.onDidChange(() => this.refresh()),
-      pipeline.onDidUpdate(() => this.emitter.fire(undefined)),
+      pipeline.onDidUpdate(uri => this.onPipelineUpdate(uri)),
     )
     void this.loadFileLists().then(() => this.refresh())
   }
@@ -47,11 +48,18 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
   private async findFallback(root: RootEntry): Promise<string[]> {
     const uris = await vscode.workspace.findFiles('**/*', '**/node_modules/**', 20_000)
     return uris
-      .filter(u => u.fsPath.startsWith(root.rootDir))
+      .filter(u => isInsideRoot(root.rootDir, u.fsPath))
       .map(u => path.relative(root.rootDir, u.fsPath).split(path.sep).join('/'))
   }
 
   refresh(): void {
+    // Anything not refreshed by the pass we're about to start is left over
+    // from an even older generation (e.g. a file that fell out of the
+    // attested set, or a root that no longer exists) — drop it so covCache
+    // doesn't grow unboundedly across refreshes.
+    for (const [key, entry] of this.covCache) {
+      if (entry.gen !== this.gen) this.covCache.delete(key)
+    }
     this.gen++
     this.queue = this.ctx.roots.flatMap(root =>
       root.store.attestedFiles()
@@ -61,29 +69,67 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     this.emitter.fire(undefined)
   }
 
+  // The pipeline recomputes status (from the live buffer) whenever an open
+  // document changes, debounced. If that document is an attested file, jump
+  // it to the front of the queue so the sidebar picks up the new coverage
+  // promptly instead of waiting for the next full refresh().
+  private onPipelineUpdate(uri: vscode.Uri): void {
+    const root = this.ctx.rootFor(uri)
+    const sourcePath = root ? this.ctx.sourcePathOf(uri) : null
+    const state = root && sourcePath ? root.store.stateFor(sourcePath) : undefined
+    if (root && sourcePath && state && state.current.length > 0) {
+      this.queue.unshift({ root, sourcePath })
+      this.runQueue()
+    }
+    this.emitter.fire(undefined)
+  }
+
   private runQueue(): void {
     if (this.queueRunning) return
     this.queueRunning = true
     const tick = (): void => {
       const job = this.queue.shift()
       if (!job) { this.queueRunning = false; this.emitter.fire(undefined); return }
-      const abs = path.join(job.root.rootDir, job.sourcePath)
-      try {
-        const stat = fs.statSync(abs)
-        const key = abs
-        const hit = this.covCache.get(key)
-        if (!hit || hit.mtimeMs !== stat.mtimeMs || hit.gen !== this.gen) {
-          const text = fs.readFileSync(abs, 'utf8')
-          const state = job.root.store.stateFor(job.sourcePath)!
-          const entries = state.current.map(record => ({
-            record, res: resolveRecord(record, text) })) // text-only (spec §8)
-          this.covCache.set(key, {
-            mtimeMs: stat.mtimeMs, gen: this.gen, coverage: fileCoverage(entries, text) })
-        }
-      } catch { /* unreadable/binary → excluded */ }
-      setTimeout(tick, 25)
+      void this.processJob(job).finally(() => setTimeout(tick, 25))
     }
     tick()
+  }
+
+  private async processJob(job: { root: RootEntry; sourcePath: string }): Promise<void> {
+    const abs = path.join(job.root.rootDir, job.sourcePath)
+    try {
+      // An attested file open in an editor may have unsaved edits: the
+      // gutter's live decorations are driven by the pipeline (buffer text
+      // via statusFor), so route through the same call here instead of
+      // re-reading disk — otherwise the sidebar % reflects last-saved
+      // content and visibly disagrees with the gutter until save.
+      const openDoc = vscode.workspace.textDocuments.find(
+        d => d.uri.scheme === 'file' && d.uri.fsPath === abs)
+      if (openDoc) {
+        const status = await this.pipeline.statusFor(openDoc)
+        // A live buffer has no disk mtime; -1 just needs to differ from any
+        // real fs mtimeMs so a later disk read (once the doc closes) isn't
+        // mistaken for "unchanged" and skipped.
+        this.covCache.set(abs, { mtimeMs: -1, gen: this.gen, coverage: status.coverage })
+        return
+      }
+      const stat = fs.statSync(abs)
+      const hit = this.covCache.get(abs)
+      if (!hit || hit.mtimeMs !== stat.mtimeMs || hit.gen !== this.gen) {
+        const text = fs.readFileSync(abs, 'utf8')
+        const state = job.root.store.stateFor(job.sourcePath)!
+        const entries = state.current.map(record => ({
+          record, res: resolveRecord(record, text) })) // text-only (spec §8)
+        this.covCache.set(abs, {
+          mtimeMs: stat.mtimeMs, gen: this.gen, coverage: fileCoverage(entries, text) })
+      }
+    } catch {
+      // Deleted after existsSync, EACCES, EISDIR, store race, etc. Write a
+      // sentinel entry so the file renders as excluded (no %, dim) instead
+      // of getting stuck on a permanent pending spinner from a missing
+      // cache entry.
+      this.covCache.set(abs, { mtimeMs: 0, gen: this.gen, coverage: null })
+    }
   }
 
   private treeFiles(root: RootEntry): TreeFile[] {
