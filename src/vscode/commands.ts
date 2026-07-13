@@ -6,8 +6,12 @@ import { authorSlug } from '../core/paths'
 import { appendLine, initVouch } from '../core/writer'
 import type { Author, RecordKind, ReviewRecord, Tombstone } from '../core/types'
 import type { VouchContext } from './context'
+import type { StatusPipeline } from './pipeline'
 import { documentSymbols } from './symbols'
-import { headSha, identity, isDirty } from './gitinfo'
+import { headSha, identity, isDirty, remoteUrl } from './gitinfo'
+import { showDiff, findRecord } from './diff'
+import { commitUrl } from '../core/giturl'
+import { isValidSha } from '../core/hovermd'
 
 async function resolveAuthor(
   extCtx: vscode.ExtensionContext, cwd: string,
@@ -135,9 +139,12 @@ async function unvouch(
 }
 
 export function registerCommands(
-  extCtx: vscode.ExtensionContext, ctx: VouchContext, refresh: () => void,
+  extCtx: vscode.ExtensionContext, ctx: VouchContext, refresh: () => void, pipeline: StatusPipeline,
 ): void {
   const reg = (id: string, fn: () => Promise<void> | void): void => {
+    extCtx.subscriptions.push(vscode.commands.registerCommand(id, fn))
+  }
+  const reg2 = (id: string, fn: (arg: string) => Promise<void> | void): void => {
     extCtx.subscriptions.push(vscode.commands.registerCommand(id, fn))
   }
   reg('vouch.init', async () => {
@@ -152,4 +159,21 @@ export function registerCommands(
   reg('vouch.class', () => attest(extCtx, ctx, refresh, 'class'))
   reg('vouch.file', () => attest(extCtx, ctx, refresh, 'file'))
   reg('vouch.unvouch', () => unvouch(extCtx, ctx, refresh))
+  reg2('vouch.showDiff', (recordId: string) => showDiff(ctx, pipeline, recordId))
+  reg2('vouch.openCommitOnWeb', async (recordId: string) => {
+    const found = findRecord(ctx, recordId)
+    if (!found?.record.commit) {
+      void vscode.window.showInformationMessage('Vouch: no commit recorded.'); return
+    }
+    // Defense-in-depth: commit values come from shared, cross-user .vouch/
+    // records and are otherwise untrusted (see core/hovermd.ts isValidSha).
+    // Never hand an unvalidated value to openExternal.
+    if (!isValidSha(found.record.commit)) {
+      void vscode.window.showInformationMessage('Vouch: invalid commit reference.'); return
+    }
+    const remote = await remoteUrl(found.rootDir)
+    const url = remote ? commitUrl(remote, found.record.commit) : null
+    if (!url) { void vscode.window.showInformationMessage('Vouch: no recognizable git remote.'); return }
+    void vscode.env.openExternal(vscode.Uri.parse(url))
+  })
 }

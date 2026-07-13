@@ -4,6 +4,7 @@ import { registerCommands } from './commands'
 import { StatusPipeline } from './pipeline'
 import { Gutter } from './gutter'
 import { registerHovers } from './hovers'
+import { VouchBaselineProvider } from './diff'
 
 let ctx: VouchContext | undefined
 // Reassigned below once the status pipeline is wired up; kept as a
@@ -17,7 +18,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
   ctx = await VouchContext.create()
   context.subscriptions.push({ dispose: () => ctx?.dispose() })
 
-  registerCommands(context, ctx, () => refresh())
+  const pipeline = new StatusPipeline(ctx, context.subscriptions)
+  registerCommands(context, ctx, () => refresh(), pipeline)
+  context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(
+    VouchBaselineProvider.scheme, new VouchBaselineProvider()))
 
   const watcher = vscode.workspace.createFileSystemWatcher('**/.vouch/reviews/**/*.jsonl')
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -31,7 +35,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
   context.subscriptions.push(watcher)
   context.subscriptions.push({ dispose: () => { if (timer) clearTimeout(timer) } })
 
-  const pipeline = new StatusPipeline(ctx, context.subscriptions)
   const gutter = new Gutter(context.extensionUri)
   context.subscriptions.push(gutter)
   registerHovers(context, ctx, pipeline)
