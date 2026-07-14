@@ -24,7 +24,7 @@ Vouch is a VS Code extension (Cursor-compatible) that treats **human review as c
 
 ```
  src/auth/service.ts
-   ✓ 18 │  async function login(email, password) {       ← reviewed, green gutter check
+   ✓ 18 │  async function login(email, password) {       ← reviewed, teal gutter check
      19 │    const user = await this.users.find(email)
    ⚠ 42 │  async function refresh(token) {               ← dismissed: code changed since review
 ```
@@ -66,14 +66,14 @@ AI writes a large and growing share of the code in most repositories. Review is 
 
 ## Install
 
-Vouch is distributed as a `.vsix` (not yet on the Marketplace). Build it yourself (see [Development](#development)) or grab `vouch-0.0.1.vsix`, then:
+Vouch is distributed as a `.vsix` (not yet on the Marketplace). Build it yourself (see [Development](#development)) or grab `vouch-review-coverage-0.0.1.vsix`, then:
 
 ```bash
 # VS Code
-code --install-extension vouch-0.0.1.vsix
+code --install-extension vouch-review-coverage-0.0.1.vsix
 
 # Cursor (ships a `cursor` CLI that takes the same flag)
-cursor --install-extension vouch-0.0.1.vsix
+cursor --install-extension vouch-review-coverage-0.0.1.vsix
 ```
 
 Prefer clicking? In either editor's **Extensions** view, open the `⋯` menu → **Install from VSIX…** and pick the file.
@@ -83,7 +83,7 @@ Prefer clicking? In either editor's **Extensions** view, open the `⋯` menu →
 1. Open a git repository.
 2. Run **`Vouch: Initialize in workspace`** from the command palette. This creates `.vouch/config.json` and adds a `merge=union` hint for `.vouch/reviews/**` to `.gitattributes`.
 3. Read some code. Select the lines you reviewed and run **`Vouch: Review selected lines`** (also on the editor's right-click **Vouch** submenu). Add an optional comment.
-4. A green ✓ appears in the gutter, and a `✓ Reviewed by you, just now` CodeLens sits above the range.
+4. A teal ✓ appears in the gutter, and a `✓ Reviewed by you, just now` CodeLens sits above the range.
 5. Open the **Vouch** view in the activity bar for workspace-wide coverage — an honest per-file/per-folder tree and a **Reviewers** section.
 
 > **Tip** — `Vouch: Review enclosing function` / `…enclosing class` snap the attestation to a symbol (when a language server is available); `Vouch: Review entire file` attests the whole document.
@@ -96,7 +96,7 @@ Every attested range is in exactly one state, computed **at render time** — st
 
 | Status | Gutter | Meaning |
 |---|:---:|---|
-| **Reviewed** | ✓ green | Current text hashes identically to what was reviewed. Nothing has changed since a human read it. |
+| **Reviewed** | ✓ teal | Current text hashes identically to what was reviewed. Nothing has changed since a human read it. |
 | **Dismissed** | ⚠ orange | A record exists, but the text changed since review — even a whitespace or comment edit (Vouch hashes exact text). Re-review or diff to see what changed. |
 | **Unreviewed** | *(none)* | No record at all. Absence is itself the signal: no one has vouched for this yet. |
 
@@ -177,7 +177,7 @@ npm install
 npm run typecheck    # tsc --noEmit (strict)
 npm test             # vitest — core unit tests
 npm run test:int     # @vscode/test-electron — integration suite (downloads VS Code on first run)
-npm run package      # build + produce vouch-0.0.1.vsix
+npm run package      # build + produce vouch-review-coverage-0.0.1.vsix
 
 npm run watch        # rebuild on change while developing
 ```

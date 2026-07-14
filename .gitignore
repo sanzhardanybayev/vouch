@@ -5,3 +5,5 @@ out/
 out-int/
 .vscode-test/
 *.vsix
+.DS_Store
+media/logo-src.png

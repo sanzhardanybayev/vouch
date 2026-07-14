@@ -10,11 +10,11 @@ export class Gutter {
       vscode.Uri.joinPath(extensionUri, 'media', name)
     this.reviewed = vscode.window.createTextEditorDecorationType({
       gutterIconPath: icon('reviewed.svg'), gutterIconSize: 'contain',
-      overviewRulerColor: '#2ea043', overviewRulerLane: vscode.OverviewRulerLane.Right,
+      overviewRulerColor: '#1DBF9A', overviewRulerLane: vscode.OverviewRulerLane.Right,
     })
     this.dismissed = vscode.window.createTextEditorDecorationType({
       gutterIconPath: icon('dismissed.svg'), gutterIconSize: 'contain',
-      overviewRulerColor: '#d29922', overviewRulerLane: vscode.OverviewRulerLane.Right,
+      overviewRulerColor: '#FF7A2E', overviewRulerLane: vscode.OverviewRulerLane.Right,
     })
   }
 

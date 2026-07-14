@@ -1,6 +1,7 @@
 **
 !dist/**
 !media/**
+media/logo-src.png
 !package.json
 !README.md
 !LICENSE
