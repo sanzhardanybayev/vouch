@@ -1,6 +1,6 @@
 {
   "name": "vouch-review-coverage",
-  "displayName": "Vouch",
+  "displayName": "Vouch — Review Coverage",
   "description": "Human-authored review coverage: attest code you reviewed; attestations auto-dismiss when the code changes.",
   "version": "0.0.1",
   "publisher": "sanzhardanybayev",
