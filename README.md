@@ -7,6 +7,8 @@
 Writing code got cheap. A human actually reading it and vouching for it did not.
 **Vouch** tracks who reviewed what — anchored to the exact text, shared through git, honest by default.
 
+[![Marketplace](https://img.shields.io/visual-studio-marketplace/v/sanzhardanybayev.vouch-review-coverage?label=Marketplace&logo=visualstudiocode&color=007ACC)](https://marketplace.visualstudio.com/items?itemName=sanzhardanybayev.vouch-review-coverage)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/sanzhardanybayev.vouch-review-coverage?color=1DBF9A)](https://marketplace.visualstudio.com/items?itemName=sanzhardanybayev.vouch-review-coverage)
 [![License: MIT](https://img.shields.io/github/license/sanzhardanybayev/vouch?color=blue)](LICENSE)
 [![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.85-007ACC?logo=visualstudiocode&logoColor=white)](https://code.visualstudio.com/)
 [![Cursor](https://img.shields.io/badge/Cursor-compatible-000000?logo=cursor&logoColor=white)](https://cursor.com/)
@@ -66,17 +68,21 @@ AI writes a large and growing share of the code in most repositories. Review is 
 
 ## Install
 
-Vouch is distributed as a `.vsix` (not yet on the Marketplace). Build it yourself (see [Development](#development)) or grab `vouch-review-coverage-0.0.1.vsix`, then:
+**VS Code — from the Marketplace.** Search **"Vouch - Review Coverage"** in the Extensions view, or:
 
 ```bash
-# VS Code
-code --install-extension vouch-review-coverage-0.0.1.vsix
+code --install-extension sanzhardanybayev.vouch-review-coverage
+```
 
-# Cursor (ships a `cursor` CLI that takes the same flag)
+Or open the [Marketplace listing](https://marketplace.visualstudio.com/items?itemName=sanzhardanybayev.vouch-review-coverage).
+
+**Cursor / VSCodium.** These install from [Open VSX](https://open-vsx.org), not the VS Code Marketplace. Until the Open VSX release lands, install from the packaged file — grab `vouch-review-coverage-0.0.1.vsix` (from [Releases](https://github.com/sanzhardanybayev/vouch/releases) or `npm run package`) and run:
+
+```bash
 cursor --install-extension vouch-review-coverage-0.0.1.vsix
 ```
 
-Prefer clicking? In either editor's **Extensions** view, open the `⋯` menu → **Install from VSIX…** and pick the file.
+or use **Extensions → ⋯ → Install from VSIX…**.
 
 ## Quickstart
 
