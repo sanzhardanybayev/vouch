@@ -9,8 +9,7 @@
 Writing code got cheap. A human actually reading it and vouching for it did not.
 **Vouch** tracks who reviewed what — anchored to the exact text, shared through git, honest by default.
 
-[![Marketplace](https://img.shields.io/visual-studio-marketplace/v/sanzhardanybayev.vouch-review-coverage?label=Marketplace&logo=visualstudiocode&color=007ACC)](https://marketplace.visualstudio.com/items?itemName=sanzhardanybayev.vouch-review-coverage)
-[![Installs](https://img.shields.io/visual-studio-marketplace/i/sanzhardanybayev.vouch-review-coverage?color=1DBF9A)](https://marketplace.visualstudio.com/items?itemName=sanzhardanybayev.vouch-review-coverage)
+[![Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-Vouch-007ACC?logo=visualstudiocode&logoColor=white)](https://marketplace.visualstudio.com/items?itemName=sanzhardanybayev.vouch-review-coverage)
 [![License: MIT](https://img.shields.io/github/license/sanzhardanybayev/vouch?color=blue)](LICENSE)
 [![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.85-007ACC?logo=visualstudiocode&logoColor=white)](https://code.visualstudio.com/)
 [![Cursor](https://img.shields.io/badge/Cursor-compatible-000000?logo=cursor&logoColor=white)](https://cursor.com/)
