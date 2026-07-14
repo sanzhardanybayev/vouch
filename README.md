@@ -1,6 +1,8 @@
 <div align="center">
 
-# ✓ Vouch
+<img src="media/icon.png" width="120" alt="Vouch logo" />
+
+# Vouch
 
 ### Human review coverage for the age of AI-generated code.
 
