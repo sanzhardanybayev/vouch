@@ -37,6 +37,43 @@ describe('timelineHtml', () => {
     expect(escapeHtml(`<>&"'`)).toBe('&lt;&gt;&amp;&quot;&#39;')
   })
 
+  it('renders a Go to button for ranged and file-kind entries, not for rangeless ones', () => {
+    const html = timelineHtml({
+      sourcePath: 'src/a.ts',
+      nowIso: NOW,
+      users: [{
+        name: 'San', email: 's@x.com',
+        chains: [{
+          revoked: false,
+          entries: [
+            { recordId: 'r1', status: 'reviewed' as const, createdAt: NOW,
+              commit: '', commitLink: null, kind: 'selection', range: [1, 3] as [number, number] },
+            { recordId: 'r2', status: 'reviewed' as const, createdAt: NOW,
+              commit: '', commitLink: null, kind: 'file' },
+            { recordId: 'r3', status: 'historical' as const, createdAt: NOW,
+              commit: '', commitLink: null, kind: 'selection' },
+          ],
+        }],
+      }],
+    }, 'vscode-resource:', 'NONCE')
+    expect(html).toContain('<button data-cmd="reveal" data-id="r1">Go to</button>')
+    expect(html).toContain('<button data-cmd="reveal" data-id="r2">Go to</button>')
+    expect(html).not.toContain('data-cmd="reveal" data-id="r3"')
+  })
+
+  it('renders the Diff button for historical entries too', () => {
+    const html = timelineHtml(INPUT, 'vscode-resource:', 'NONCE')
+    expect(html).toContain('<button data-cmd="showDiff" data-id="r1">Diff</button>')
+    expect(html).toContain('<button data-cmd="showDiff" data-id="r0">Diff</button>')
+  })
+
+  it('reveal wiring rides the existing generic button handler - no reveal code in the script', () => {
+    const html = timelineHtml(INPUT, 'vscode-resource:', 'NONCE')
+    const script = html.slice(html.indexOf('<script'))
+    expect(script).toContain('button[data-cmd]')
+    expect(script).not.toContain('reveal')
+  })
+
   it('gates commit sha/link through isValidSha — a malicious commit renders no sha and no link', () => {
     const html = timelineHtml({
       sourcePath: 'src/a.ts',

@@ -38,6 +38,7 @@ export function registerHovers(
           commitLink: e.record.commit && isValidSha(e.record.commit) && remote
             ? commitUrl(remote, e.record.commit) : null,
           recordId: e.record.id,
+          supersedesCount: e.record.supersedes?.length,
         }))
         const md = new vscode.MarkdownString(rangeHoverMd(entries, new Date().toISOString()))
         // Only allowlist the exact command links rangeHoverMd emits — never

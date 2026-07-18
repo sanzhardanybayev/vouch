@@ -6,6 +6,28 @@ export function overlaps(a: [number, number], b: [number, number]): boolean {
   return a[0] <= b[1] && b[0] <= a[1]
 }
 
+export function encloses(outer: [number, number], inner: [number, number]): boolean {
+  return outer[0] <= inner[0] && inner[1] <= outer[1]
+}
+
+// Supersede trigger (ADR 0001): full enclosure only, never partial overlap.
+export function supersedeCandidates(params: {
+  author: Author
+  kind: RecordKind
+  symbol?: string
+  range?: [number, number]
+  existingCurrent: { record: ReviewRecord; res: Resolution }[]
+}): { record: ReviewRecord; res: Resolution }[] {
+  const { kind, symbol, range } = params
+  return params.existingCurrent
+    .filter(e => e.record.author.email === params.author.email)
+    .filter(e => {
+      if (kind === 'file') return true
+      if (symbol && e.record.symbol === symbol) return true
+      return range ? encloses(range, e.res.effectiveRange) : false
+    })
+}
+
 export function buildRecord(params: {
   id: string
   author: Author
@@ -21,13 +43,7 @@ export function buildRecord(params: {
 }): ReviewRecord {
   const { kind, range, docText } = params
 
-  const mine = params.existingCurrent.filter(
-    e => e.record.author.email === params.author.email)
-  const superseded = mine.filter(e => {
-    if (kind === 'file') return true
-    if (params.symbol && e.record.symbol === params.symbol) return true
-    return range ? overlaps(e.res.effectiveRange, range) : false
-  }).map(e => e.record.id)
+  const superseded = supersedeCandidates(params).map(e => e.record.id)
 
   const rec: ReviewRecord = {
     id: params.id,

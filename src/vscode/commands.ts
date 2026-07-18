@@ -2,7 +2,8 @@ import * as vscode from 'vscode'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { buildRecord, buildReattachLines, overlaps } from '../core/attest'
+import { buildRecord, buildReattachLines, overlaps, supersedeCandidates } from '../core/attest'
+import { prefillComment, summarizeCandidates } from '../core/consolidate'
 import { enclosingSymbol, resolveRecord, resolveSymbolPath } from '../core/anchor'
 import { authorSlug } from '../core/paths'
 import { appendLine, initVouch } from '../core/writer'
@@ -60,7 +61,8 @@ export function currentResolved(
 }
 
 async function attest(
-  extCtx: vscode.ExtensionContext, ctx: VouchContext, refresh: () => void, kind: RecordKind,
+  extCtx: vscode.ExtensionContext, ctx: VouchContext, refresh: () => void,
+  pipeline: StatusPipeline, kind: RecordKind,
 ): Promise<void> {
   const st = await editorState(ctx)
   if (!st) return
@@ -86,19 +88,67 @@ async function attest(
 
   const author = await resolveAuthor(extCtx, rootDir)
   if (!author) return
+
+  const docText = doc.getText()
+  const existing = currentResolved(ctx, rootDir, sourcePath, docText)
+  const candidates = supersedeCandidates({ author, kind, symbol, range, existingCurrent: existing })
+  const summary = summarizeCandidates(candidates)
+
+  let prefill = ''
+  if (candidates.length > 0 && (summary.withComments > 0 || summary.dismissed > 0)) {
+    // Modal text is counts only: candidate symbols/comments are untrusted
+    // cross-user data and must never be interpolated into message/detail.
+    const message = `Vouching this ${kind} supersedes ${summary.total} of your reviews.`
+    const detailParts: string[] = []
+    if (summary.withComments > 0) detailParts.push(`${summary.withComments} of them carry comments.`)
+    if (summary.dismissed > 0) {
+      detailParts.push(`${summary.dismissed} are dismissed - code changed since you reviewed them.`)
+    }
+    const detail = detailParts.join('\n')
+    // Cycle through ALL dismissed candidates on repeated "View diff" clicks;
+    // stopping at the first would let the rest be superseded sight unseen.
+    const dismissedCandidates = candidates.filter(c => c.res.status === 'dismissed')
+    let diffCursor = 0
+    for (;;) {
+      const items: string[] = summary.withComments > 0
+        ? ['Copy comments & continue', 'Continue without copying']
+        : ['Continue']
+      if (summary.dismissed > 0) items.push('View diff')
+      const choice = await vscode.window.showWarningMessage(
+        message, { modal: true, detail }, ...items)
+      if (choice === undefined) return // Esc aborts the vouch
+      if (choice === 'View diff') {
+        const dismissed = dismissedCandidates[diffCursor % dismissedCandidates.length]
+        if (dismissed) {
+          diffCursor++
+          await showDiff(ctx, pipeline, dismissed.record.id)
+        }
+        continue
+      }
+      if (choice === 'Copy comments & continue') prefill = prefillComment(candidates)
+      break
+    }
+  }
+
   const comment = await vscode.window.showInputBox({
-    prompt: 'Vouch: optional comment (Enter to skip)', value: '' })
+    prompt: 'Vouch: optional comment (Enter to skip)', value: prefill })
   if (comment === undefined) return // Esc cancels
 
   const commit = (await headSha(rootDir)) ?? ''
   const dirty = commit ? await isDirty(rootDir, sourcePath) : false
-  const docText = doc.getText()
+
+  // Re-read the document after the modal/InputBox waits: external actors
+  // (formatters, git checkout, agents) can rewrite the buffer while the user
+  // sits in the dialogs, and the record's hash, anchor, and supersede set
+  // must reflect the text at write time, not the pre-modal snapshot.
+  const finalDocText = doc.getText()
+  const finalExisting = currentResolved(ctx, rootDir, sourcePath, finalDocText)
 
   const rec = buildRecord({
     id: randomUUID(), author, createdAt: new Date().toISOString(),
-    commit, dirty, kind, symbol, range, docText,
+    commit, dirty, kind, symbol, range, docText: finalDocText,
     comment: comment || undefined,
-    existingCurrent: currentResolved(ctx, rootDir, sourcePath, docText),
+    existingCurrent: finalExisting,
   })
   try {
     await appendLine(rootDir, sourcePath, authorSlug(author.email), rec)
@@ -157,10 +207,10 @@ export function registerCommands(
     await initVouch(rootDir)
     void vscode.window.showInformationMessage(`Vouch: initialized in ${rootDir}`)
   })
-  reg('vouch.selection', () => attest(extCtx, ctx, refresh, 'selection'))
-  reg('vouch.function', () => attest(extCtx, ctx, refresh, 'function'))
-  reg('vouch.class', () => attest(extCtx, ctx, refresh, 'class'))
-  reg('vouch.file', () => attest(extCtx, ctx, refresh, 'file'))
+  reg('vouch.selection', () => attest(extCtx, ctx, refresh, pipeline, 'selection'))
+  reg('vouch.function', () => attest(extCtx, ctx, refresh, pipeline, 'function'))
+  reg('vouch.class', () => attest(extCtx, ctx, refresh, pipeline, 'class'))
+  reg('vouch.file', () => attest(extCtx, ctx, refresh, pipeline, 'file'))
   reg('vouch.unvouch', () => unvouch(extCtx, ctx, refresh))
   reg2('vouch.showDiff', (recordId: string) => showDiff(ctx, pipeline, recordId))
   reg2('vouch.openTimeline', (recordId: string) => openTimeline(ctx, recordId))

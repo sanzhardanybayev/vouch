@@ -1,4 +1,5 @@
 import * as vscode from 'vscode'
+import { resolveRecord } from '../core/anchor'
 import { baselineSlice } from '../core/baseline'
 import { isValidSha } from '../core/hovermd'
 import { splitLines } from '../core/text'
@@ -74,7 +75,10 @@ export async function showDiff(
     const doc = await vscode.workspace.openTextDocument(fileUri)
     const status = await pipeline.statusFor(doc)
     const entry = status.entries.find(e => e.record.id === recordId)
-    const range = entry?.res.effectiveRange ?? record.range ?? [1, 1]
+    // Historical (superseded) records never appear in the pipeline's current
+    // entries, so resolve them against the live text instead of trusting the
+    // stored line numbers - the reviewed text may have moved intact.
+    const range = entry?.res.effectiveRange ?? resolveRecord(record, doc.getText()).effectiveRange
     const currentSlice = splitLines(doc.getText()).slice(range[0] - 1, range[1]).join('\n')
     await vscode.commands.executeCommand('vscode.diff',
       register(base.text, `baseline-${sha7}`), register(currentSlice, 'current'),

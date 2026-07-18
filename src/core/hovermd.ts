@@ -6,6 +6,7 @@ export interface HoverEntry {
   commit: string
   commitLink: string | null
   recordId: string
+  supersedesCount?: number
 }
 
 export function relTime(fromIso: string, toIso: string): string {
@@ -58,6 +59,11 @@ export function rangeHoverMd(entries: HoverEntry[], nowIso: string): string {
     if (e.comment) {
       const quoted = e.comment.split(/\r?\n/).map(line => `> ${escapeMd(line)}`).join('\n')
       parts.push(quoted)
+    }
+    // Plain text on purpose - the count is a number we computed ourselves,
+    // and the existing "Open timeline" link is the navigation for it.
+    if (e.supersedesCount && e.supersedesCount > 0) {
+      parts.push(`supersedes ${e.supersedesCount} earlier review${e.supersedesCount > 1 ? 's' : ''}`)
     }
     parts.push(
       `[Open timeline](${cmd('vouch.openTimeline', e.recordId)}) · ` +

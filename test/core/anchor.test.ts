@@ -35,6 +35,20 @@ describe('resolveRecord — text scan', () => {
     expect(resolveRecord(r, shrunk)).toEqual({ status: 'dismissed', effectiveRange: [1, 1] })
   })
 
+  it('corrupt range below 1 → dismissed, clamped to line 1', () => {
+    // Records come from shared .vouch/ files and only `id` is validated on
+    // parse, so a crafted or corrupt range like [0,3] must never yield an
+    // effectiveRange below 1 (VS Code Position throws on negative lines).
+    const r = recFor(DOC, [1, 3], { range: [0, 3], hash: 'nope', headHash: undefined })
+    expect(resolveRecord(r, DOC)).toEqual({ status: 'dismissed', effectiveRange: [1, 3] })
+  })
+
+  it('non-numeric range values → dismissed at line 1, never NaN', () => {
+    const r = recFor(DOC, [1, 3],
+      { range: ['a', 'b'] as unknown as [number, number], hash: 'nope', headHash: undefined })
+    expect(resolveRecord(r, DOC)).toEqual({ status: 'dismissed', effectiveRange: [1, 1] })
+  })
+
   it('duplicate matches → nearest to stored range wins', () => {
     const block = 'function dup() {\n  return 9\n}'
     const doc = [block, '', 'spacer', 'spacer', 'spacer', '', block].join('\n')
