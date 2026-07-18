@@ -13,7 +13,7 @@ Writing code got cheap. A human actually reading it and vouching for it did not.
 [![License: MIT](https://img.shields.io/github/license/sanzhardanybayev/vouch?color=blue)](LICENSE)
 [![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.85-007ACC?logo=visualstudiocode&logoColor=white)](https://code.visualstudio.com/)
 [![Cursor](https://img.shields.io/badge/Cursor-compatible-000000?logo=cursor&logoColor=white)](https://cursor.com/)
-[![Tests](https://img.shields.io/badge/tests-144%20passing-brightgreen)](#development)
+[![Tests](https://img.shields.io/badge/tests-173%20passing-brightgreen)](#development)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](#contributing)
 
@@ -109,6 +109,10 @@ Every attested range is in exactly one state, computed **at render time** — st
 
 When a symbol-anchored review's code moves but isn't edited, Vouch follows it via the language server's symbol provider first, then a text scan — so the mark stays attached to the code, not a stale line number.
 
+### Superseding your own reviews
+
+Reviewing a scope that **fully encloses** your earlier reviews (e.g. a whole function or file over reviews of pieces inside it) supersedes them: the new review becomes current and the absorbed ones stay navigable as chain history in the timeline, with a `supersedes N earlier reviews` note on hover. Partial overlap never supersedes - those reviews coexist as peers. If any absorbed review carries a comment or was dismissed, Vouch asks before writing: you can copy the old comments into the new review as an editable prefill, or view a diff of what changed under a dismissed one. Rationale lives in [ADR 0001](docs/adr/0001-supersede-on-enclosure-only.md); the shared vocabulary is in [CONTEXT.md](CONTEXT.md).
+
 ### Honest coverage
 
 A folder's percentage is **reviewed lines ÷ lines across every git-tracked file** in it — an untouched file still contributes its full line count to the denominator. A hundred-file folder with one small reviewed selection shows a low, honest number, not 100%. Binary and empty files are excluded from the ratio entirely; unreviewed files stay visually dim in the tree while still counting against their folder's total.
@@ -189,7 +193,7 @@ npm run package      # build + produce vouch-review-coverage-0.0.1.vsix
 npm run watch        # rebuild on change while developing
 ```
 
-Press **F5** in VS Code to launch an Extension Development Host with Vouch loaded. Requires Node 18+ and git on `PATH`. The test suite is **144 tests** (136 unit + 8 integration) and must stay green.
+Press **F5** in VS Code to launch an Extension Development Host with Vouch loaded. Requires Node 18+ and git on `PATH`. The test suite is **173 tests** (165 unit + 8 integration) and must stay green.
 
 ## Roadmap / Limitations
 

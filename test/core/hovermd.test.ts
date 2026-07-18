@@ -36,6 +36,36 @@ describe('rangeHoverMd', () => {
   })
 })
 
+describe('rangeHoverMd - supersedes count', () => {
+  const base = {
+    authorName: 'San', status: 'reviewed' as const, createdAt: NOW,
+    commit: '', commitLink: null, recordId: 'r1',
+  }
+
+  it('renders nothing when supersedesCount is absent or 0', () => {
+    expect(rangeHoverMd([base], NOW)).not.toContain('supersedes')
+    expect(rangeHoverMd([{ ...base, supersedesCount: 0 }], NOW)).not.toContain('supersedes')
+  })
+
+  it('renders singular for 1', () => {
+    const md = rangeHoverMd([{ ...base, supersedesCount: 1 }], NOW)
+    expect(md).toContain('supersedes 1 earlier review')
+    expect(md).not.toContain('supersedes 1 earlier reviews')
+  })
+
+  it('renders plural for 3', () => {
+    expect(rangeHoverMd([{ ...base, supersedesCount: 3 }], NOW))
+      .toContain('supersedes 3 earlier reviews')
+  })
+
+  it('is plain text placed before the action links, never a link itself', () => {
+    const md = rangeHoverMd([{ ...base, supersedesCount: 2 }], NOW)
+    expect(md.indexOf('supersedes 2 earlier reviews')).toBeLessThan(md.indexOf('[Open timeline]'))
+    expect(md).not.toContain('[supersedes')
+    expect(md).not.toContain('supersedes 2 earlier reviews](')
+  })
+})
+
 describe('callSiteMd', () => {
   it('one line per author', () => {
     const md = callSiteMd([

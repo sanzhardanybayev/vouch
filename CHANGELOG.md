@@ -3,6 +3,19 @@
 All notable changes to the Vouch extension are documented here. This project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Consolidating supersede** - reviewing a scope that fully encloses your own
+  earlier reviews supersedes them; the absorbed reviews stay navigable as chain
+  history in the timeline, with a "supersedes N earlier reviews" note on hover.
+  Partial overlap never supersedes: those reviews coexist as peers. When an
+  absorbed review carries a comment or was dismissed, Vouch asks before writing
+  and can copy the old comments into the new review as an editable prefill, or
+  show a diff of what changed under a dismissed one. Rationale in
+  [ADR 0001](docs/adr/0001-supersede-on-enclosure-only.md).
+
 ## [0.0.1] — 2026-07-14
 
 Initial release.

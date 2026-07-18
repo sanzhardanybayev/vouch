@@ -99,7 +99,7 @@ Location: **git repository root** (so record paths are stable no matter which su
 
 ## 5. Status resolution (anchor engine)
 
-**Anchor identity.** All of a user's records connected via `supersedes` links form one *anchor chain*. The current attestation of a chain is its latest non-revoked record by `createdAt` (union-merge forks resolve by timestamp). To prevent parallel chains for the same code: **every vouch command auto-supersedes** — the new record's `supersedes` lists the ids of all of that user's current records whose effective range overlaps the new range (or whose symbol path equals the new one). Running "Vouch: Review enclosing function" twice therefore yields one chain, not two icons.
+**Anchor identity.** All of a user's records connected via `supersedes` links form one *anchor chain*. The current attestation of a chain is its latest non-revoked record by `createdAt` (union-merge forks resolve by timestamp). To prevent parallel chains for the same code: **every vouch command auto-supersedes** — the new record's `supersedes` lists the ids of the same user's current records it absorbs. The trigger is full enclosure of the old scope (equal ranges and same symbol count; a file review encloses everything), never partial overlap - see [ADR 0001](../../adr/0001-supersede-on-enclosure-only.md). Running "Vouch: Review enclosing function" twice therefore yields one chain, not two icons.
 
 **Resolving one current record against the current document:**
 
@@ -150,7 +150,7 @@ src/
 ### Gutter
 
 - One icon at the first line of each current record's effective range (line 1 for `kind=file`): ✓ (reviewed, green) / ⚠ (dismissed, orange). Unreviewed code has no icon — absence is the third status.
-- Same-user overlaps are collapsed by auto-supersede (§5). Different users' records on the same line render one icon; `dismissed` wins visually (needs attention beats reviewed); hover lists every author's status.
+- Same-user enclosed reviews are collapsed by auto-supersede (§5); partially overlapping ones coexist as peers (ADR 0001). Different users' records on the same line render one icon; `dismissed` wins visually (needs attention beats reviewed); hover lists every author's status.
 
 ### Range hover + review panel
 

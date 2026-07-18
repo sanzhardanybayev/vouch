@@ -46,11 +46,15 @@ function entryHtml(e: TimelineEntry, nowIso: string): string {
   const comment = e.comment ? `<blockquote>${escapeHtml(e.comment)}</blockquote>` : ''
   const actions = e.status === 'dismissed'
     ? ` <button data-cmd="reReview" data-id="${escapeHtml(e.recordId)}">Re-review</button>` : ''
-  const diffBtn = e.status !== 'historical'
-    ? ` <button data-cmd="showDiff" data-id="${escapeHtml(e.recordId)}">Diff</button>` : ''
+  // Every entry with a locatable scope gets a Go to button; kind 'file'
+  // reveals the top of the file. Diff is offered for historical entries too -
+  // diffing a superseded review against the current file is supported.
+  const goBtn = e.range || e.kind === 'file'
+    ? ` <button data-cmd="reveal" data-id="${escapeHtml(e.recordId)}">Go to</button>` : ''
+  const diffBtn = ` <button data-cmd="showDiff" data-id="${escapeHtml(e.recordId)}">Diff</button>`
   return `<li class="${escapeHtml(e.status)}"><span class="glyph">${GLYPH[e.status]}</span> ` +
     `<strong>${e.status}</strong> — ${escapeHtml(what)}, ${relTime(e.createdAt, nowIso)}` +
-    `${shaHtml}${actions}${diffBtn}${comment}</li>`
+    `${shaHtml}${actions}${goBtn}${diffBtn}${comment}</li>`
 }
 
 export function timelineHtml(input: TimelineInput, cspSource: string, nonce: string): string {

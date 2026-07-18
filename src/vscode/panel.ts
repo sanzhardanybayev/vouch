@@ -55,5 +55,33 @@ export async function openTimeline(ctx: VouchContext, recordId: string): Promise
   panel.webview.onDidReceiveMessage((msg: { cmd: string; recordId: string }) => {
     if (msg.cmd === 'reReview') void vscode.commands.executeCommand('vouch.reReview', msg.recordId)
     if (msg.cmd === 'showDiff') void vscode.commands.executeCommand('vouch.showDiff', msg.recordId)
+    if (msg.cmd === 'reveal') void revealRecord(ctx, msg.recordId)
   })
+}
+
+// recordId arrives from the webview and is untrusted - it is only ever used
+// as a lookup key into our own store (findRecord) and never interpolated
+// into anything.
+async function revealRecord(ctx: VouchContext, recordId: string): Promise<void> {
+  const found = findRecord(ctx, recordId)
+  if (!found) { void vscode.window.showWarningMessage('Vouch: record not found.'); return }
+  const { record, rootDir, sourcePath } = found
+  let doc: vscode.TextDocument
+  try {
+    doc = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(rootDir, sourcePath)))
+  } catch {
+    void vscode.window.showWarningMessage(`Vouch: ${sourcePath} not found.`)
+    return
+  }
+  const range: [number, number] = record.kind === 'file'
+    ? [1, 1] : resolveRecord(record, doc.getText()).effectiveRange
+  // Record ranges are 1-based inclusive lines; resolveRecord clamps them to
+  // >= 1 (untrusted record data - Position throws on negative lines) and
+  // validateRange clamps the line-end sentinel column and any past-the-end
+  // line to the document.
+  const target = doc.validateRange(
+    new vscode.Range(range[0] - 1, 0, range[1] - 1, Number.MAX_SAFE_INTEGER))
+  const editor = await vscode.window.showTextDocument(doc, { preview: false })
+  editor.selection = new vscode.Selection(target.start, target.end)
+  editor.revealRange(target, vscode.TextEditorRevealType.InCenterIfOutsideViewport)
 }

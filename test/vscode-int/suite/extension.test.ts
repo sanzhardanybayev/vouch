@@ -7,14 +7,14 @@ import { pct } from '../../../src/core/coverage'
 
 describe('activation', () => {
   it('activates and exposes the test api', async () => {
-    const ext = vscode.extensions.getExtension('sanzhar.vouch')!
+    const ext = vscode.extensions.getExtension('sanzhardanybayev.vouch-review-coverage')!
     assert.ok(ext, 'extension found')
     const api = await ext.activate()
     assert.ok(api.getTestApi().context, 'VouchContext created')
   })
 
   it('resolves root and source path for a file opened from the workspace folder', async () => {
-    const ext = vscode.extensions.getExtension('sanzhar.vouch')!
+    const ext = vscode.extensions.getExtension('sanzhardanybayev.vouch-review-coverage')!
     const api = await ext.activate()
     const folder = vscode.workspace.workspaceFolders![0]!
     const fileUri = vscode.Uri.joinPath(folder.uri, 'src', 'calc.ts')
@@ -58,7 +58,7 @@ describe('status pipeline', () => {
     const ws = vscode.workspace.workspaceFolders![0]!.uri.fsPath
     const doc = await vscode.workspace.openTextDocument(path.join(ws, 'src/calc.ts'))
     const editor = await vscode.window.showTextDocument(doc)
-    const api = (await vscode.extensions.getExtension('sanzhar.vouch')!.activate()).getTestApi()
+    const api = (await vscode.extensions.getExtension('sanzhardanybayev.vouch-review-coverage')!.activate()).getTestApi()
 
     let st = await api.pipeline.statusFor(doc)
     assert.strictEqual(st.entries.length, 1) // record from the Task 11 test
@@ -94,14 +94,14 @@ describe('sidebar', () => {
     await new Promise(r => setTimeout(r, 500))
     await vscode.commands.executeCommand<unknown>('workbench.view.extension.vouch')
     // The command just focuses the view; real assertion is via the test api:
-    const api = (await vscode.extensions.getExtension('sanzhar.vouch')!.activate()).getTestApi()
+    const api = (await vscode.extensions.getExtension('sanzhardanybayev.vouch-review-coverage')!.activate()).getTestApi()
     assert.ok(api.context.roots.length >= 1)
   })
 })
 
 describe('v1.1 honest coverage + reviewers', () => {
   it('sidebar exposes engineers and wires real coverage end-to-end', async () => {
-    const api = (await vscode.extensions.getExtension('sanzhar.vouch')!.activate()).getTestApi()
+    const api = (await vscode.extensions.getExtension('sanzhardanybayev.vouch-review-coverage')!.activate()).getTestApi()
     // Let the background queue settle (it now counts every tracked file).
     await new Promise(r => setTimeout(r, 1500))
     const root = api.context.roots[0]!

@@ -102,9 +102,15 @@ export function resolveRecord(
     }
   }
 
-  // Dismissed: display at stored range clamped to document
+  // Dismissed: display at stored range clamped to the document. Ranges come
+  // from shared .vouch/ records and are untrusted (only `id` is validated on
+  // parse), so clamp both bounds into [1, maxLine] and coerce non-finite
+  // values to 1 - callers feed effectiveRange straight into vscode.Range,
+  // whose Position constructor throws on negative lines.
   const maxLine = Math.max(1, lines.length)
-  const start = Math.min(stored[0], maxLine)
-  const end = Math.min(stored[1], maxLine)
+  const clampLine = (n: number): number =>
+    Number.isFinite(n) ? Math.min(Math.max(1, Math.floor(n)), maxLine) : 1
+  const start = clampLine(stored[0])
+  const end = clampLine(stored[1])
   return { status: 'dismissed', effectiveRange: [start, Math.max(start, end)] }
 }
