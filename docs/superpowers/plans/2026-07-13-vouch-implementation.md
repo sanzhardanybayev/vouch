@@ -1,5 +1,11 @@
 # Vouch Implementation Plan
 
+> **Superseded in part:** this plan is a point-in-time artifact. The
+> auto-supersede semantics described here (Task 11: any-overlap supersede) were
+> later changed to enclosure-only supersede - see
+> [ADR 0001](../../adr/0001-supersede-on-enclosure-only.md) for the current
+> rule and rationale.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the Vouch VS Code/Cursor extension: human-authored review attestations anchored to exact text hashes, stored in a git-versioned `.vouch/` folder, surfaced via gutter icons, hovers, a timeline panel, and a coverage sidebar.
