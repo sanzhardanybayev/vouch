@@ -29,8 +29,9 @@ export function prefillComment(
   candidates: { record: ReviewRecord; res: Resolution }[],
 ): string {
   return candidates
-    .filter(c => c.record.comment)
-    .sort((a, b) => (a.record.range?.[0] ?? 0) - (b.record.range?.[0] ?? 0))
-    .map(c => `> ${label(c.record)}: ${c.record.comment}`)
+    .map(c => ({ c, text: (c.record.comment ?? '').replace(/\s+/g, ' ').trim() }))
+    .filter(e => e.text)
+    .sort((a, b) => (a.c.record.range?.[0] ?? 0) - (b.c.record.range?.[0] ?? 0))
+    .map(e => `> ${label(e.c.record)}: ${e.text}`)
     .join(' | ')
 }

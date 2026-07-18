@@ -109,20 +109,25 @@ async function attest(
     // stopping at the first would let the rest be superseded sight unseen.
     const dismissedCandidates = candidates.filter(c => c.res.status === 'dismissed')
     let diffCursor = 0
+    let inspecting = false
     for (;;) {
       const items: string[] = summary.withComments > 0
         ? ['Copy comments & continue', 'Continue without copying']
         : ['Continue']
       if (summary.dismissed > 0) items.push('View diff')
-      const choice = await vscode.window.showWarningMessage(
-        message, { modal: true, detail }, ...items)
-      if (choice === undefined) return // Esc aborts the vouch
+      const choice = inspecting
+        ? await vscode.window.showWarningMessage(
+            `${message} ${detail.replace(/\n/g, ' ')}`.trim(), ...items)
+        : await vscode.window.showWarningMessage(
+            message, { modal: true, detail }, ...items)
+      if (choice === undefined) return // Esc/dismiss aborts the vouch
       if (choice === 'View diff') {
         const dismissed = dismissedCandidates[diffCursor % dismissedCandidates.length]
         if (dismissed) {
           diffCursor++
           await showDiff(ctx, pipeline, dismissed.record.id)
         }
+        inspecting = true
         continue
       }
       if (choice === 'Copy comments & continue') prefill = prefillComment(candidates)

@@ -80,6 +80,21 @@ describe('prefillComment', () => {
       '> file: file note | > run (was L1-3): first | > L4-6: second')
   })
 
+  it('collapses newlines and runs of whitespace in comments to single spaces', () => {
+    const cands = [
+      candidate({ id: 'a', range: [1, 2], comment: 'line one\nline two\n\n  line three\t end ' }),
+    ]
+    expect(prefillComment(cands)).toBe('> L1-2: line one line two line three end')
+  })
+
+  it('skips comments that are only whitespace', () => {
+    const cands = [
+      candidate({ id: 'a', range: [1, 2], comment: ' \n\t ' }),
+      candidate({ id: 'b', range: [3, 4], comment: 'real' }),
+    ]
+    expect(prefillComment(cands)).toBe('> L3-4: real')
+  })
+
   it('keeps pipe and angle characters in comments untransformed', () => {
     const cands = [
       candidate({ id: 'a', range: [1, 2], comment: 'a | b > c' }),
