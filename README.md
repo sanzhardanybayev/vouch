@@ -78,10 +78,10 @@ code --install-extension sanzhardanybayev.vouch-review-coverage
 
 Or open the [Marketplace listing](https://marketplace.visualstudio.com/items?itemName=sanzhardanybayev.vouch-review-coverage).
 
-**Cursor / VSCodium.** These install from [Open VSX](https://open-vsx.org), not the VS Code Marketplace. Until the Open VSX release lands, install from the packaged file — grab `vouch-review-coverage-0.0.1.vsix` (from [Releases](https://github.com/sanzhardanybayev/vouch/releases) or `npm run package`) and run:
+**Cursor / VSCodium.** These install from [Open VSX](https://open-vsx.org), not the VS Code Marketplace. Until the Open VSX release lands, install from the packaged file — grab `vouch-review-coverage-0.0.2.vsix` (from [Releases](https://github.com/sanzhardanybayev/vouch/releases) or `npm run package`) and run:
 
 ```bash
-cursor --install-extension vouch-review-coverage-0.0.1.vsix
+cursor --install-extension vouch-review-coverage-0.0.2.vsix
 ```
 
 or use **Extensions → ⋯ → Install from VSIX…**.
@@ -140,7 +140,7 @@ Records live under a `.vouch/` folder at the repo root and are meant to be **com
       a1b2c3d4.jsonl   # one JSONL file per author — slug = 8 hex of sha256(email)
 ```
 
-Each line is one **append-only** JSON record: who reviewed, when, the commit that was HEAD, the hash of the exact reviewed text, and an optional comment. Revoking a review appends a *tombstone* rather than deleting anything — the store is write-once, so history is never rewritten.
+Each line is one **append-only** JSON record: who reviewed, when, the commit that was HEAD, the hash of the exact reviewed text, its location anchor (enclosing symbol and neighboring-line context hashes - see [Location binding](#location-binding)), and an optional comment. Revoking a review appends a *tombstone* rather than deleting anything — the store is write-once, so history is never rewritten.
 
 Records are sharded **per author** on purpose: two people reviewing the same file write to two different files, so their reviews never collide — even through a hosted web-UI merge, which ignores `.gitattributes` merge drivers. Init also writes a `.vouch/reviews/** merge=union` hint so LOCAL merges/rebases of same-author shards resolve to "keep both" instead of a manual conflict (safe, because nothing is ever removed).
 
@@ -208,7 +208,7 @@ npm install
 npm run typecheck    # tsc --noEmit (strict)
 npm test             # vitest — core unit tests
 npm run test:int     # @vscode/test-electron — integration suite (downloads VS Code on first run)
-npm run package      # build + produce vouch-review-coverage-0.0.1.vsix
+npm run package      # build + produce vouch-review-coverage-0.0.2.vsix
 
 npm run watch        # rebuild on change while developing
 ```
