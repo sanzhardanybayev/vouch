@@ -10,6 +10,11 @@ describe('relTime', () => {
     expect(relTime('2026-07-13T09:00:00Z', NOW)).toBe('3h ago')
     expect(relTime('2026-07-11T12:00:00Z', NOW)).toBe('2d ago')
   })
+
+  it('unparseable createdAt renders "unknown time", never NaN', () => {
+    expect(relTime('garbage', NOW)).toBe('unknown time')
+    expect(relTime('', NOW)).toBe('unknown time')
+  })
 })
 
 describe('rangeHoverMd', () => {
@@ -33,6 +38,21 @@ describe('rangeHoverMd', () => {
       createdAt: NOW, commit: '', commitLink: null, recordId: 'r1' }], NOW)
     expect(md).toContain('⚠ dismissed (changed since review)')
     expect(md).not.toContain('](null')
+  })
+
+  it('ambiguous gets its own label and a Resolve command link', () => {
+    const md = rangeHoverMd([{ authorName: 'San', status: 'ambiguous',
+      createdAt: NOW, commit: '', commitLink: null, recordId: 'r1' }], NOW)
+    expect(md).toContain('? ambiguous (location cannot be verified)')
+    expect(md).toContain(`command:vouch.resolveAmbiguous?${encodeURIComponent(JSON.stringify(['r1']))}`)
+  })
+
+  it('reviewed and dismissed entries never carry a Resolve link', () => {
+    for (const status of ['reviewed', 'dismissed'] as const) {
+      const md = rangeHoverMd([{ authorName: 'San', status,
+        createdAt: NOW, commit: '', commitLink: null, recordId: 'r1' }], NOW)
+      expect(md).not.toContain('vouch.resolveAmbiguous')
+    }
   })
 })
 

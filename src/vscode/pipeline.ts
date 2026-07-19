@@ -1,9 +1,11 @@
 import * as vscode from 'vscode'
-import { resolveRecord, resolveSymbolPath, type Resolution } from '../core/anchor'
+import { buildLineIndex, resolveRecord, type Resolution } from '../core/anchor'
 import { fileCoverage, type FileCoverage } from '../core/coverage'
+import { isKnownKind } from '../core/records'
 import type { ReviewRecord } from '../core/types'
 import type { VouchContext } from './context'
 import { documentSymbols } from './symbols'
+import { logError } from './log'
 
 export interface FileStatus {
   entries: { record: ReviewRecord; res: Resolution }[]
@@ -16,6 +18,7 @@ export class StatusPipeline {
   private cache = new WeakMap<vscode.TextDocument, { version: number; gen: number; status: FileStatus }>()
   private gen = 0
   private timers = new Map<string, ReturnType<typeof setTimeout>>()
+  private retried = new Set<string>()
 
   constructor(private readonly ctx: VouchContext, subscriptions: vscode.Disposable[]) {
     subscriptions.push(
@@ -30,7 +33,7 @@ export class StatusPipeline {
     for (const ed of vscode.window.visibleTextEditors) {
       void this.statusFor(ed.document)
         .then(() => this.emitter.fire(ed.document.uri))
-        .catch(() => {})
+        .catch(e => logError('pipeline.refreshVisible', e))
     }
   }
 
@@ -42,7 +45,7 @@ export class StatusPipeline {
       this.timers.delete(key)
       void this.statusFor(doc)
         .then(() => this.emitter.fire(doc.uri))
-        .catch(() => {})
+        .catch(e => logError('pipeline.schedule', e))
     }, 300))
   }
 
@@ -64,19 +67,42 @@ export class StatusPipeline {
     if (!state || state.current.length === 0) return empty
 
     const docText = doc.getText()
-    const needSymbols = state.current.some(r => r.symbol)
-    const symbols = needSymbols ? await documentSymbols(doc.uri) : []
+    // Records of a kind this client doesn't understand (written by a future
+    // Vouch version) stay in chain topology but never render - showing them
+    // as "dismissed (changed since review)" would be a lie about code that
+    // didn't change.
+    const shown = state.current.filter(isKnownKind)
+    const needSymbols = shown.some(r => (r.symbol ?? r.anchorSymbol) !== undefined)
+    const symbols = needSymbols ? await documentSymbols(doc.uri) : null
 
-    const entries = state.current.map(record => {
-      const symRange = record.symbol
-        ? resolveSymbolPath(symbols, record.symbol)?.range ?? null : null
-      return { record, res: resolveRecord(record, docText, symRange) }
-    })
+    const index = buildLineIndex(docText)
+    const entries = shown.map(record => (
+      { record, res: resolveRecord(record, docText, symbols, index) }))
     const status: FileStatus = { entries, coverage: fileCoverage(entries, docText) }
     // If the document or invalidation generation moved on while we were
     // awaiting symbols, this result is already stale — return it (better
     // than nothing) but don't let it poison the cache for the next call.
     if (doc.version !== versionAtStart || this.gen !== genAtStart) return status
+    // Symbols needed but unavailable (language server still warming up, flat
+    // SymbolInformation provider): the result is DEGRADED — resolutions took
+    // the conservative path and may show ambiguous for records an available
+    // provider would prove reviewed. Don't cache it, and schedule one retry
+    // per (version, gen) so the surfaces self-heal once the provider is
+    // ready, without polling forever when no provider will ever exist.
+    if (needSymbols && symbols === null) {
+      const retryKey = `${doc.uri.toString()}:${versionAtStart}:${genAtStart}`
+      if (!this.retried.has(retryKey)) {
+        this.retried.add(retryKey)
+        if (this.retried.size > 200) this.retried.clear()
+        setTimeout(() => {
+          if (doc.version === versionAtStart && this.gen === genAtStart) {
+            void this.statusFor(doc).then(() => this.emitter.fire(doc.uri))
+              .catch(e => logError('pipeline.symbolRetry', e))
+          }
+        }, 2000)
+      }
+      return status
+    }
     this.cache.set(doc, { version: versionAtStart, gen: genAtStart, status })
     return status
   }

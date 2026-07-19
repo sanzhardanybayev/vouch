@@ -17,12 +17,20 @@ function toNode(s: vscode.DocumentSymbol): SymbolNode {
   }
 }
 
-export async function documentSymbols(uri: vscode.Uri): Promise<SymbolNode[]> {
+/**
+ * null = unverifiable. That covers: no provider, a provider that answered
+ * empty (indistinguishable from a still-warming language server), and the
+ * flat SymbolInformation shape (unusable for hierarchical path resolution;
+ * spec §5 trusts only DocumentSymbol). Any record carrying a symbol anchor
+ * was captured in a file that HAD symbols, so a trustworthy provider answers
+ * non-empty for that file — which makes the resolver's "symbol path not
+ * found -> orphaned" branch sound exactly when this returns a real tree.
+ */
+export async function documentSymbols(uri: vscode.Uri): Promise<SymbolNode[] | null> {
   const result = await vscode.commands.executeCommand<
     (vscode.DocumentSymbol | vscode.SymbolInformation)[] | undefined
   >('vscode.executeDocumentSymbolProvider', uri)
-  if (!result || result.length === 0) return []
-  // Spec §5: only the hierarchical DocumentSymbol shape is trusted.
-  if (!('children' in result[0]!)) return []
+  if (!result || result.length === 0) return null
+  if (!('children' in result[0]!)) return null
   return (result as vscode.DocumentSymbol[]).map(toNode)
 }

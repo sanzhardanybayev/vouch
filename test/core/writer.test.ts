@@ -54,3 +54,14 @@ describe('initVouch', () => {
     expect(await readFile(join(dir, '.vouch/config.json'), 'utf8')).toBe(existing)
   })
 })
+
+describe('initVouch — CRLF .gitattributes', () => {
+  it('does not duplicate the merge=union line in a CRLF file', async () => {
+    const { writeFile } = await import('node:fs/promises')
+    await writeFile(join(dir, '.gitattributes'), '*.png binary\r\n.vouch/reviews/** merge=union\r\n')
+    await initVouch(dir)
+    const attrs = await readFile(join(dir, '.gitattributes'), 'utf8')
+    const occurrences = attrs.split(/\r?\n/).filter(l => l.trim() === '.vouch/reviews/** merge=union')
+    expect(occurrences).toHaveLength(1)
+  })
+})

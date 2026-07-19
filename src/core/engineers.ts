@@ -1,4 +1,5 @@
 import type { EngineerSummary } from './store'
+import { normalizeEmail } from './paths'
 
 export interface AggregatedEngineerFile<R> { root: R; sourcePath: string; count: number }
 export interface AggregatedEngineer<R> {
@@ -24,12 +25,16 @@ export function aggregateEngineers<R>(
   roots: R[],
   summariesOf: (root: R) => EngineerSummary[],
 ): AggregatedEngineer<R>[] {
+  // Keyed by NORMALIZED email (display keeps the first-seen form): the same
+  // reviewer with different email casing across roots is one person, matching
+  // store.perEngineer's within-root normalization.
   const byEmail = new Map<string, AggregatedEngineer<R>>()
   for (const root of roots) {
     for (const e of summariesOf(root)) {
       const taggedFiles = e.files.map(f => ({ root, sourcePath: f.sourcePath, count: f.count }))
-      const ex = byEmail.get(e.email)
-      if (!ex) byEmail.set(e.email, { name: e.name, email: e.email, reviewCount: e.reviewCount, files: taggedFiles })
+      const key = normalizeEmail(e.email)
+      const ex = byEmail.get(key)
+      if (!ex) byEmail.set(key, { name: e.name, email: e.email, reviewCount: e.reviewCount, files: taggedFiles })
       else { ex.reviewCount += e.reviewCount; ex.files.push(...taggedFiles) }
     }
   }

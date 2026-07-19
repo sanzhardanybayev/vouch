@@ -96,3 +96,27 @@ describe('perEngineer (v1.1)', () => {
     expect(s.perEngineer()).toEqual([])
   })
 })
+
+describe('ReviewStore — identity + scoping', () => {
+  it('merges case-differing emails into one reviewer identity', async () => {
+    const SAN2 = { name: 'San', email: 'S@X.COM' }
+    await writeShard('src/a.ts', SAN.email, [rec('r1')])
+    await writeShard('src/b.ts', SAN2.email, [rec('r2', SAN2)])
+    const s = new ReviewStore(dir)
+    await s.load()
+    expect(s.perEngineer()).toHaveLength(1)
+    expect(s.perEngineer()[0]!.reviewCount).toBe(2)
+    expect(s.counts().perAuthor.size).toBe(1)
+  })
+
+  it('counts, perEngineer, and orphans honor an includeSourcePath predicate', async () => {
+    await writeShard('src/a.ts', SAN.email, [rec('r1')])
+    await writeShard('vendor/lib.js', SAN.email, [rec('r2')])
+    const s = new ReviewStore(dir)
+    await s.load()
+    const include = (p: string): boolean => !p.startsWith('vendor/')
+    expect(s.counts(include).records).toBe(1)
+    expect(s.perEngineer(include)[0]!.reviewCount).toBe(1)
+    expect(s.orphans(() => false, include)).toEqual(['src/a.ts'])
+  })
+})

@@ -23,7 +23,8 @@
       { "command": "vouch.showDiff", "title": "Vouch: Diff since my review" },
       { "command": "vouch.openCommitOnWeb", "title": "Vouch: Open review commit on web" },
       { "command": "vouch.openTimeline", "title": "Vouch: Open review timeline" },
-      { "command": "vouch.reattach", "title": "Vouch: Re-attach orphaned reviews" }
+      { "command": "vouch.reattach", "title": "Vouch: Re-attach orphaned reviews" },
+      { "command": "vouch.refresh", "title": "Vouch: Refresh reviews and coverage" }
     ],
     "menus": {
       "editor/context": [
@@ -53,6 +54,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show a CodeLens above reviewed code with reviewer, time, and links to the timeline / re-review / diff."
+        },
+        "vouch.coverage.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Scan tracked files to compute the sidebar coverage tree and percentages. When off, the sidebar still shows reviewers and orphaned reviews; gutter, hover, and CodeLens are unaffected. The scan only ever runs in repositories containing a .vouch/ folder."
         }
       }
     }

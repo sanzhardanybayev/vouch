@@ -11,20 +11,32 @@ import { showAtCommit } from './gitinfo'
 const contents = new Map<string, string>()
 let counter = 0
 
+const warned = new Set<string>()
+
 export class VouchBaselineProvider implements vscode.TextDocumentContentProvider {
   static readonly scheme = 'vouch-baseline'
   provideTextDocumentContent(uri: vscode.Uri): string {
-    return contents.get(uri.path) ?? ''
+    const hit = contents.get(uri.path)
+    if (hit !== undefined) return hit
+    // Evicted (or lost across a window reload while VS Code restored the
+    // tab): an empty pane would misrepresent every reviewed line as newly
+    // added, so say what happened — once per tab.
+    if (!warned.has(uri.path)) {
+      warned.add(uri.path)
+      void vscode.window.showWarningMessage(
+        'Vouch: this diff baseline is no longer cached - reopen the diff from the hover or CodeLens.')
+    }
+    return ''
   }
 }
 
 // Baseline/current text pairs accumulate one entry per showDiff call and are
 // never explicitly released (there's no "close" hook for a diff tab), so the
 // map would otherwise grow unbounded over a long editing session. Cap it: the
-// map is insertion-ordered, so once it exceeds 50 entries, drop the oldest
-// ones first — 50 entries is ~25 recent diffs (a baseline+current pair per
-// showDiff), comfortably more than anyone needs to keep open at once.
-const MAX_CONTENTS = 50
+// map is insertion-ordered, so once it exceeds the cap, drop the oldest
+// entries first — 200 entries is ~100 recent diffs, comfortably more than
+// anyone keeps open, at the cost of at most a few MB of text.
+const MAX_CONTENTS = 200
 
 function register(text: string, label: string): vscode.Uri {
   const key = `/${counter++}/${label}`

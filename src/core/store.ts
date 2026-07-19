@@ -1,7 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { join, relative } from 'node:path'
-import { dedupeById, parseJsonl, resolveChains, type ChainState } from './records'
-import { sourcePathOfShard } from './paths'
+import { dedupeById, parseJsonl, resolveChains, type ChainState, type MovedIndex } from './records'
+import { normalizeEmail, sourcePathOfShard } from './paths'
 import type { VouchLine } from './types'
 
 export interface EngineerSummary {
@@ -32,8 +32,29 @@ export class ReviewStore {
       if (!linesBySource.has(source)) linesBySource.set(source, [])
       linesBySource.get(source)!.push(...lines)
     }
+    const dedupedBySource = new Map<string, VouchLine[]>()
     for (const [source, lines] of linesBySource) {
-      this.bySource.set(source, resolveChains(dedupeById(lines)))
+      const { lines: deduped, corrupt } = dedupeById(lines)
+      this.corruptLines += corrupt
+      dedupedBySource.set(source, deduped)
+    }
+    // Moved copies live under a DIFFERENT source path than the tombstones that
+    // revoked their originals, so the index must span the whole store. Every
+    // parsed line counts, current or not: a later unvouch of the moved copy
+    // must not resurrect the old-path record.
+    const movedIndex: MovedIndex = new Map()
+    for (const lines of dedupedBySource.values()) {
+      for (const l of lines) {
+        const movedFrom = (l as { movedFrom?: string }).movedFrom
+        const hash = (l as { hash?: string }).hash
+        const email = l.author.email
+        if (!movedFrom || typeof hash !== 'string') continue
+        if (!movedIndex.has(movedFrom)) movedIndex.set(movedFrom, [])
+        movedIndex.get(movedFrom)!.push({ email, hash })
+      }
+    }
+    for (const [source, lines] of dedupedBySource) {
+      this.bySource.set(source, resolveChains(lines, movedIndex))
     }
   }
 
@@ -48,41 +69,60 @@ export class ReviewStore {
       .sort()
   }
 
-  orphans(exists: (sourcePath: string) => boolean): string[] {
-    return this.attestedFiles().filter(p => !exists(p))
+  // The optional include predicate scopes store-derived aggregates to the
+  // sidebar's universe (.vouchignore): an ignored path must not inflate
+  // header counts, reviewer stats, or surface re-attach prompts. Core stays
+  // pure — callers own compiling the matcher.
+  orphans(
+    exists: (sourcePath: string) => boolean,
+    include: (sourcePath: string) => boolean = () => true,
+  ): string[] {
+    return this.attestedFiles().filter(p => include(p) && !exists(p))
   }
 
-  counts(): { records: number; perAuthor: Map<string, { name: string; current: number }> } {
+  counts(
+    include: (sourcePath: string) => boolean = () => true,
+  ): { records: number; perAuthor: Map<string, { name: string; current: number }> } {
     let records = 0
+    // Keyed by normalized email so a case/whitespace-differing git config
+    // never splits one reviewer into two rows; display name is first seen.
     const perAuthor = new Map<string, { name: string; current: number }>()
-    for (const s of this.bySource.values()) {
+    for (const [sourcePath, s] of this.bySource) {
+      if (!include(sourcePath)) continue
       for (const r of s.current) {
         records++
-        const entry = perAuthor.get(r.author.email) ?? { name: r.author.name, current: 0 }
+        const key = normalizeEmail(r.author.email)
+        const entry = perAuthor.get(key) ?? { name: r.author.name, current: 0 }
         entry.current++
-        perAuthor.set(r.author.email, entry)
+        perAuthor.set(key, entry)
       }
     }
     return { records, perAuthor }
   }
 
-  perEngineer(): EngineerSummary[] {
-    // email -> { name, total, perFile: Map<sourcePath, count> }
-    const byEmail = new Map<string, { name: string; total: number; perFile: Map<string, number> }>()
+  perEngineer(include: (sourcePath: string) => boolean = () => true): EngineerSummary[] {
+    // normalized email -> { display name/email (first seen), total, per-file counts }
+    const byEmail = new Map<string, {
+      name: string; email: string; total: number; perFile: Map<string, number> }>()
     for (const [sourcePath, state] of this.bySource) {
+      if (!include(sourcePath)) continue
       for (const r of state.current) {
-        let e = byEmail.get(r.author.email)
-        if (!e) { e = { name: r.author.name, total: 0, perFile: new Map() }; byEmail.set(r.author.email, e) }
+        const key = normalizeEmail(r.author.email)
+        let e = byEmail.get(key)
+        if (!e) {
+          e = { name: r.author.name, email: r.author.email, total: 0, perFile: new Map() }
+          byEmail.set(key, e)
+        }
         e.total++
         e.perFile.set(sourcePath, (e.perFile.get(sourcePath) ?? 0) + 1)
       }
     }
     const out: EngineerSummary[] = []
-    for (const [email, e] of byEmail) {
+    for (const e of byEmail.values()) {
       const files = [...e.perFile.entries()]
         .map(([sourcePath, count]) => ({ sourcePath, count }))
         .sort((a, b) => b.count - a.count || a.sourcePath.localeCompare(b.sourcePath))
-      out.push({ name: e.name, email, reviewCount: e.total, files })
+      out.push({ name: e.name, email: e.email, reviewCount: e.total, files })
     }
     out.sort((a, b) => b.reviewCount - a.reviewCount || a.name.localeCompare(b.name))
     return out

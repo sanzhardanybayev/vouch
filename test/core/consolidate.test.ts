@@ -29,16 +29,17 @@ function candidate(opts: {
 
 describe('summarizeCandidates', () => {
   it('empty input yields zeros', () => {
-    expect(summarizeCandidates([])).toEqual({ total: 0, dismissed: 0, withComments: 0 })
+    expect(summarizeCandidates([])).toEqual({ total: 0, dismissed: 0, ambiguous: 0, withComments: 0 })
   })
 
-  it('counts totals, dismissed, and commented candidates', () => {
+  it('counts totals, dismissed, ambiguous, and commented candidates', () => {
     const cands = [
       candidate({ id: 'a', range: [1, 2], comment: 'looks fine' }),
       candidate({ id: 'b', range: [3, 4], status: 'dismissed' }),
       candidate({ id: 'c', range: [5, 6], status: 'dismissed', comment: 'stale' }),
+      candidate({ id: 'd', range: [7, 8], status: 'ambiguous' }),
     ]
-    expect(summarizeCandidates(cands)).toEqual({ total: 3, dismissed: 2, withComments: 2 })
+    expect(summarizeCandidates(cands)).toEqual({ total: 4, dismissed: 2, ambiguous: 1, withComments: 2 })
   })
 })
 
