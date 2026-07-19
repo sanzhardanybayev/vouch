@@ -76,7 +76,7 @@ async function attest(
     range = [sel.start.line + 1, sel.end.line + 1]
   } else if (kind === 'function' || kind === 'class') {
     const symbols = await documentSymbols(doc.uri)
-    const found = enclosingSymbol(symbols, editor.selection.active.line + 1, kind)
+    const found = symbols ? enclosingSymbol(symbols, editor.selection.active.line + 1, kind) : null
     if (!found) {
       void vscode.window.showInformationMessage(
         `Vouch: no enclosing ${kind} symbol — select lines and use "Review selected lines".`)
@@ -260,7 +260,7 @@ export function registerCommands(
     }
     if (target.record.symbol) {
       const symbols = await documentSymbols(editor.document.uri)
-      const node = resolveSymbolPath(symbols, target.record.symbol)
+      const node = symbols ? resolveSymbolPath(symbols, target.record.symbol) : null
       if (node) {
         editor.selection = new vscode.Selection(node.range[0] - 1, 0, node.range[1] - 1, 0)
         await vscode.commands.executeCommand(

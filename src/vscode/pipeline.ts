@@ -1,5 +1,5 @@
 import * as vscode from 'vscode'
-import { resolveRecord, resolveSymbolPath, type Resolution } from '../core/anchor'
+import { buildLineIndex, resolveRecord, type Resolution } from '../core/anchor'
 import { fileCoverage, type FileCoverage } from '../core/coverage'
 import type { ReviewRecord } from '../core/types'
 import type { VouchContext } from './context'
@@ -16,6 +16,7 @@ export class StatusPipeline {
   private cache = new WeakMap<vscode.TextDocument, { version: number; gen: number; status: FileStatus }>()
   private gen = 0
   private timers = new Map<string, ReturnType<typeof setTimeout>>()
+  private retried = new Set<string>()
 
   constructor(private readonly ctx: VouchContext, subscriptions: vscode.Disposable[]) {
     subscriptions.push(
@@ -64,19 +65,36 @@ export class StatusPipeline {
     if (!state || state.current.length === 0) return empty
 
     const docText = doc.getText()
-    const needSymbols = state.current.some(r => r.symbol)
-    const symbols = needSymbols ? await documentSymbols(doc.uri) : []
+    const needSymbols = state.current.some(r => (r.symbol ?? r.anchorSymbol) !== undefined)
+    const symbols = needSymbols ? await documentSymbols(doc.uri) : null
 
-    const entries = state.current.map(record => {
-      const symRange = record.symbol
-        ? resolveSymbolPath(symbols, record.symbol)?.range ?? null : null
-      return { record, res: resolveRecord(record, docText, symRange) }
-    })
+    const index = buildLineIndex(docText)
+    const entries = state.current.map(record => (
+      { record, res: resolveRecord(record, docText, symbols, index) }))
     const status: FileStatus = { entries, coverage: fileCoverage(entries, docText) }
     // If the document or invalidation generation moved on while we were
     // awaiting symbols, this result is already stale — return it (better
     // than nothing) but don't let it poison the cache for the next call.
     if (doc.version !== versionAtStart || this.gen !== genAtStart) return status
+    // Symbols needed but unavailable (language server still warming up, flat
+    // SymbolInformation provider): the result is DEGRADED — resolutions took
+    // the conservative path and may show ambiguous for records an available
+    // provider would prove reviewed. Don't cache it, and schedule one retry
+    // per (version, gen) so the surfaces self-heal once the provider is
+    // ready, without polling forever when no provider will ever exist.
+    if (needSymbols && symbols === null) {
+      const retryKey = `${doc.uri.toString()}:${versionAtStart}:${genAtStart}`
+      if (!this.retried.has(retryKey)) {
+        this.retried.add(retryKey)
+        if (this.retried.size > 200) this.retried.clear()
+        setTimeout(() => {
+          if (doc.version === versionAtStart && this.gen === genAtStart) {
+            void this.statusFor(doc).then(() => this.emitter.fire(doc.uri)).catch(() => {})
+          }
+        }, 2000)
+      }
+      return status
+    }
     this.cache.set(doc, { version: versionAtStart, gen: genAtStart, status })
     return status
   }

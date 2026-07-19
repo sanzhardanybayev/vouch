@@ -7,7 +7,7 @@ export function escapeHtml(s: string): string {
 
 export interface TimelineEntry {
   recordId: string
-  status: 'reviewed' | 'dismissed' | 'historical'
+  status: 'reviewed' | 'dismissed' | 'ambiguous' | 'historical'
   createdAt: string
   commit: string
   commitLink: string | null
@@ -23,7 +23,7 @@ export interface TimelineInput {
     chains: { entries: TimelineEntry[]; revoked: boolean }[] }[]
 }
 
-const GLYPH = { reviewed: '✓', dismissed: '⚠', historical: '·' } as const
+const GLYPH = { reviewed: '✓', dismissed: '⚠', ambiguous: '?', historical: '·' } as const
 
 function entryHtml(e: TimelineEntry, nowIso: string): string {
   // The commit (and thus any derived sha/link) comes from shared, untrusted
@@ -44,8 +44,10 @@ function entryHtml(e: TimelineEntry, nowIso: string): string {
   const what = e.symbol ? `${e.kind} ${e.symbol}`
     : e.range ? `${e.kind} L${e.range[0]}–${e.range[1]}` : e.kind
   const comment = e.comment ? `<blockquote>${escapeHtml(e.comment)}</blockquote>` : ''
-  const actions = e.status === 'dismissed'
-    ? ` <button data-cmd="reReview" data-id="${escapeHtml(e.recordId)}">Re-review</button>` : ''
+  const resolveBtn = e.status === 'ambiguous'
+    ? ` <button data-cmd="resolveAmbiguous" data-id="${escapeHtml(e.recordId)}">Resolve</button>` : ''
+  const actions = (e.status === 'dismissed' || e.status === 'ambiguous'
+    ? ` <button data-cmd="reReview" data-id="${escapeHtml(e.recordId)}">Re-review</button>` : '') + resolveBtn
   // Every entry with a locatable scope gets a Go to button; kind 'file'
   // reveals the top of the file. Diff is offered for historical entries too -
   // diffing a superseded review against the current file is supported.
@@ -74,6 +76,7 @@ export function timelineHtml(input: TimelineInput, cspSource: string, nonce: str
   .tab { margin-right: .5em; } .pane { display: none; } .pane.active { display: block; }
   li.reviewed .glyph { color: var(--vscode-charts-green); }
   li.dismissed .glyph { color: var(--vscode-charts-yellow); }
+  li.ambiguous .glyph { color: var(--vscode-charts-orange); }
   blockquote { opacity: .8; margin: .2em 0 .6em 1.5em; }
 </style></head><body>
 <h3>${escapeHtml(input.sourcePath)}</h3>

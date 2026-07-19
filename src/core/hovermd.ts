@@ -1,6 +1,8 @@
+import type { Status } from './anchor'
+
 export interface HoverEntry {
   authorName: string
-  status: 'reviewed' | 'dismissed'
+  status: Status
   createdAt: string
   comment?: string
   commit: string
@@ -10,15 +12,21 @@ export interface HoverEntry {
 }
 
 export function relTime(fromIso: string, toIso: string): string {
-  const s = Math.max(0, (Date.parse(toIso) - Date.parse(fromIso)) / 1000)
+  // createdAt is untrusted record data; an unparseable value must degrade to
+  // words, never to "NaNd ago".
+  const delta = (Date.parse(toIso) - Date.parse(fromIso)) / 1000
+  if (Number.isNaN(delta)) return 'unknown time'
+  const s = Math.max(0, delta)
   if (s < 60) return 'just now'
   if (s < 3600) return `${Math.floor(s / 60)}m ago`
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`
   return `${Math.floor(s / 86400)}d ago`
 }
 
-function statusLabel(status: 'reviewed' | 'dismissed'): string {
-  return status === 'reviewed' ? '✓ reviewed' : '⚠ dismissed (changed since review)'
+function statusLabel(status: Status): string {
+  if (status === 'reviewed') return '✓ reviewed'
+  if (status === 'ambiguous') return '? ambiguous (matches multiple locations)'
+  return '⚠ dismissed (changed since review)'
 }
 
 function cmd(command: string, recordId: string): string {
@@ -65,7 +73,10 @@ export function rangeHoverMd(entries: HoverEntry[], nowIso: string): string {
     if (e.supersedesCount && e.supersedesCount > 0) {
       parts.push(`supersedes ${e.supersedesCount} earlier review${e.supersedesCount > 1 ? 's' : ''}`)
     }
+    const resolve = e.status === 'ambiguous'
+      ? `[Resolve](${cmd('vouch.resolveAmbiguous', e.recordId)}) · ` : ''
     parts.push(
+      resolve +
       `[Open timeline](${cmd('vouch.openTimeline', e.recordId)}) · ` +
       `[Diff since review](${cmd('vouch.showDiff', e.recordId)}) · ` +
       `[Re-review](${cmd('vouch.reReview', e.recordId)})`)
@@ -74,7 +85,7 @@ export function rangeHoverMd(entries: HoverEntry[], nowIso: string): string {
 }
 
 export function callSiteMd(
-  entries: { authorName: string; status: 'reviewed' | 'dismissed'; createdAt: string }[],
+  entries: { authorName: string; status: Status; createdAt: string }[],
   nowIso: string,
 ): string {
   return entries.map(e =>

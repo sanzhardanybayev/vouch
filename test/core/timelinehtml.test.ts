@@ -139,3 +139,36 @@ describe('timelineHtml', () => {
     expect(html).not.toContain('evil.example')
   })
 })
+
+describe('timelineHtml — ambiguous entries', () => {
+  const mk = (status: 'reviewed' | 'dismissed' | 'ambiguous' | 'historical') => ({
+    sourcePath: 'src/a.ts',
+    nowIso: NOW,
+    users: [{
+      name: 'San', email: 's@x.com',
+      chains: [{
+        revoked: false,
+        entries: [{ recordId: 'r1', status: status as never, createdAt: NOW,
+          commit: '', commitLink: null, kind: 'selection', range: [4, 4] as [number, number] }],
+      }],
+    }],
+  })
+
+  it('renders the ? glyph, an ambiguous class, and a Resolve button', () => {
+    const html = timelineHtml(mk('ambiguous'), 'vscode-resource:', 'NONCE')
+    expect(html).toContain('class="ambiguous"')
+    expect(html).toContain('<span class="glyph">?</span>')
+    expect(html).toContain('<button data-cmd="resolveAmbiguous" data-id="r1">Resolve</button>')
+    expect(html).not.toContain('undefined')
+  })
+
+  it('offers Re-review for ambiguous entries too, and Resolve only for ambiguous', () => {
+    const amb = timelineHtml(mk('ambiguous'), 'vscode-resource:', 'NONCE')
+    expect(amb).toContain('data-cmd="reReview"')
+    const rev = timelineHtml(mk('reviewed'), 'vscode-resource:', 'NONCE')
+    expect(rev).not.toContain('resolveAmbiguous')
+    const dis = timelineHtml(mk('dismissed'), 'vscode-resource:', 'NONCE')
+    expect(dis).toContain('data-cmd="reReview"')
+    expect(dis).not.toContain('resolveAmbiguous')
+  })
+})

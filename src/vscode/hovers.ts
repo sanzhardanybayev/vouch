@@ -44,7 +44,8 @@ export function registerHovers(
         // Only allowlist the exact command links rangeHoverMd emits — never
         // grant blanket isTrusted, since authorName/comment are attacker-
         // controlled text from other users' .vouch/ records.
-        md.isTrusted = { enabledCommands: ['vouch.openTimeline', 'vouch.showDiff', 'vouch.reReview'] }
+        md.isTrusted = { enabledCommands: [
+          'vouch.openTimeline', 'vouch.showDiff', 'vouch.reReview', 'vouch.resolveAmbiguous'] }
         return new vscode.Hover(md)
       }
 
