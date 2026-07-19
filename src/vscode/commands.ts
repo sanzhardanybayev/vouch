@@ -2,10 +2,11 @@ import * as vscode from 'vscode'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { buildRecord, buildReattachLines, overlaps, supersedeCandidates } from '../core/attest'
+import { buildRecord, buildReattachLines, overlaps, rebaseRange, supersedeCandidates } from '../core/attest'
 import { prefillComment, summarizeCandidates } from '../core/consolidate'
-import { enclosingSymbol, resolveRecord, resolveSymbolPath } from '../core/anchor'
-import { authorSlug } from '../core/paths'
+import { enclosingSymbol, enclosingSymbolOfRange, resolveRecord, resolveSymbolPath } from '../core/anchor'
+import { normalizeEol } from '../core/text'
+import { authorSlug, normalizeEmail } from '../core/paths'
 import { appendLine, initVouch } from '../core/writer'
 import type { Author, RecordKind, ReviewRecord, Tombstone } from '../core/types'
 import type { VouchContext } from './context'
@@ -60,20 +61,43 @@ export function currentResolved(
   return state.current.map(record => ({ record, res: resolveRecord(record, docText) }))
 }
 
+// The selection's enclosing function/class at review time, as location
+// identity for the record. One short retry covers a still-warming language
+// server; after that, null-from-provider means the record stays content-only
+// (a small, explicit unprotected class), while a provider that ran and found
+// no enclosing symbol yields the top-level sentinel ''.
+async function captureAnchorSymbol(
+  uri: vscode.Uri, range: [number, number],
+): Promise<string | undefined> {
+  let symbols = await documentSymbols(uri)
+  if (!symbols) {
+    await new Promise(r => setTimeout(r, 300))
+    symbols = await documentSymbols(uri)
+  }
+  if (!symbols) return undefined
+  return enclosingSymbolOfRange(symbols, range, 'any')?.path ?? ''
+}
+
 async function attest(
   extCtx: vscode.ExtensionContext, ctx: VouchContext, refresh: () => void,
-  pipeline: StatusPipeline, kind: RecordKind,
+  pipeline: StatusPipeline, kind: RecordKind, supersedeId?: string,
 ): Promise<void> {
   const st = await editorState(ctx)
   if (!st) return
   const { editor, rootDir, sourcePath } = st
   const doc = editor.document
 
+  // Snapshot: text, range, and symbols captured BEFORE any dialog opens.
+  // The snapshot is what the user actually read - the record must attest to
+  // it, never to whatever the buffer holds after the dialogs.
+  const snapshotText = doc.getText()
   let range: [number, number] | undefined
   let symbol: string | undefined
+  let anchorSymbol: string | undefined
   if (kind === 'selection') {
     const sel = editor.selection
     range = [sel.start.line + 1, sel.end.line + 1]
+    anchorSymbol = await captureAnchorSymbol(doc.uri, range)
   } else if (kind === 'function' || kind === 'class') {
     const symbols = await documentSymbols(doc.uri)
     const found = symbols ? enclosingSymbol(symbols, editor.selection.active.line + 1, kind) : null
@@ -89,7 +113,7 @@ async function attest(
   const author = await resolveAuthor(extCtx, rootDir)
   if (!author) return
 
-  const docText = doc.getText()
+  const docText = snapshotText
   const existing = currentResolved(ctx, rootDir, sourcePath, docText)
   const candidates = supersedeCandidates({ author, kind, symbol, range, existingCurrent: existing })
   const summary = summarizeCandidates(candidates)
@@ -142,17 +166,36 @@ async function attest(
   const commit = (await headSha(rootDir)) ?? ''
   const dirty = commit ? await isDirty(rootDir, sourcePath) : false
 
-  // Re-read the document after the modal/InputBox waits: external actors
-  // (formatters, git checkout, agents) can rewrite the buffer while the user
-  // sits in the dialogs, and the record's hash, anchor, and supersede set
-  // must reflect the text at write time, not the pre-modal snapshot.
+  // Post-dialog guard: external actors (formatters, git checkout, agents)
+  // can rewrite the buffer while the user sits in the dialogs. Locate the
+  // SNAPSHOT content in the final text - insertions elsewhere just rebase
+  // the range (the hashed content is identical by construction), but if the
+  // reviewed content itself was edited away or duplicated, abort: a record
+  // must never attest to text the user did not read.
   const finalDocText = doc.getText()
+  let finalRange = range
+  if (kind === 'file') {
+    if (normalizeEol(finalDocText) !== normalizeEol(snapshotText)) {
+      void vscode.window.showWarningMessage(
+        'Vouch: the file changed while the dialog was open - review it again.')
+      return
+    }
+  } else {
+    const rebased = rebaseRange(snapshotText, range!, finalDocText)
+    if (!rebased) {
+      void vscode.window.showWarningMessage(
+        'Vouch: the selected code changed while the dialog was open - re-select and review again.')
+      return
+    }
+    finalRange = rebased
+  }
   const finalExisting = currentResolved(ctx, rootDir, sourcePath, finalDocText)
 
   const rec = buildRecord({
     id: randomUUID(), author, createdAt: new Date().toISOString(),
-    commit, dirty, kind, symbol, range, docText: finalDocText,
+    commit, dirty, kind, symbol, anchorSymbol, range: finalRange, docText: finalDocText,
     comment: comment || undefined,
+    supersedeId,
     existingCurrent: finalExisting,
   })
   try {
@@ -176,7 +219,7 @@ async function unvouch(
   const line = editor.selection.active.line + 1
   const docText = editor.document.getText()
   const targets = currentResolved(ctx, rootDir, sourcePath, docText).filter(e =>
-    e.record.author.email === author.email &&
+    normalizeEmail(e.record.author.email) === normalizeEmail(author.email) &&
     (e.record.kind === 'file' || overlaps(e.res.effectiveRange, [line, line])))
   if (targets.length === 0) {
     void vscode.window.showInformationMessage('Vouch: none of your reviews cover this line.')
@@ -212,10 +255,15 @@ export function registerCommands(
     await initVouch(rootDir)
     void vscode.window.showInformationMessage(`Vouch: initialized in ${rootDir}`)
   })
-  reg('vouch.selection', () => attest(extCtx, ctx, refresh, pipeline, 'selection'))
-  reg('vouch.function', () => attest(extCtx, ctx, refresh, pipeline, 'function'))
-  reg('vouch.class', () => attest(extCtx, ctx, refresh, pipeline, 'class'))
-  reg('vouch.file', () => attest(extCtx, ctx, refresh, pipeline, 'file'))
+  // The optional argument threads an explicit supersede target from the
+  // re-review/resolve flows; menu invocations may pass a Uri or nothing, so
+  // only a string is accepted (buildRecord re-validates ownership anyway).
+  const attestCmd = (kind: RecordKind) => (arg?: unknown): Promise<void> =>
+    attest(extCtx, ctx, refresh, pipeline, kind, typeof arg === 'string' ? arg : undefined)
+  reg2('vouch.selection', attestCmd('selection'))
+  reg2('vouch.function', attestCmd('function'))
+  reg2('vouch.class', attestCmd('class'))
+  reg2('vouch.file', attestCmd('file'))
   reg('vouch.unvouch', () => unvouch(extCtx, ctx, refresh))
   reg2('vouch.showDiff', (recordId: string) => showDiff(ctx, pipeline, recordId))
   reg2('vouch.openTimeline', (recordId: string) => openTimeline(ctx, recordId))
@@ -236,7 +284,12 @@ export function registerCommands(
     void vscode.env.openExternal(vscode.Uri.parse(url))
   })
 
-  reg2('vouch.reReview', async (recordId?: string) => {
+  // Accepts a record id (hover/timeline links), a {line} hint (CodeLens
+  // groups), or nothing (cursor position). The resolved target's id is
+  // threaded through the delegated attest as an explicit supersede target so
+  // re-reviewing at a MOVED location still replaces the old record instead
+  // of leaving a duplicate amber/orange marker behind.
+  reg2('vouch.reReview', async (arg?: unknown) => {
     const st = await editorState(ctx)
     if (!st) return
     const { editor, rootDir, sourcePath } = st
@@ -244,27 +297,35 @@ export function registerCommands(
     if (!author) return
     const docText = editor.document.getText()
     const resolved = currentResolved(ctx, rootDir, sourcePath, docText)
-    const line = editor.selection.active.line + 1
+    const recordId = typeof arg === 'string' ? arg : undefined
+    const lineHint = !!arg && typeof arg === 'object' && typeof (arg as { line?: unknown }).line === 'number'
+      ? (arg as { line: number }).line : undefined
+    const line = lineHint ?? editor.selection.active.line + 1
+    const actionable = (e: { record: ReviewRecord; res: { status: string; effectiveRange: [number, number] } }): boolean =>
+      normalizeEmail(e.record.author.email) === normalizeEmail(author.email) &&
+      (e.res.status === 'dismissed' || e.res.status === 'ambiguous') &&
+      (e.record.kind === 'file' || overlaps(e.res.effectiveRange, [line, line]))
     const target = recordId
       ? resolved.find(e => e.record.id === recordId)
-      : resolved.find(e => e.record.author.email === author.email &&
-          e.res.status === 'dismissed' &&
-          (e.record.kind === 'file' || overlaps(e.res.effectiveRange, [line, line])))
+      : resolved.find(actionable)
     if (!target) {
       void vscode.window.showInformationMessage('Vouch: no dismissed review of yours here.')
       return
     }
 
     if (target.record.kind === 'file') {
-      await vscode.commands.executeCommand('vouch.file'); return
+      await vscode.commands.executeCommand('vouch.file', target.record.id); return
     }
-    if (target.record.symbol) {
+    // Whole-symbol re-review is only ever right for records that COVER a
+    // symbol. A selection record with an anchor must not escalate into a
+    // function-wide attestation the user never read.
+    if ((target.record.kind === 'function' || target.record.kind === 'class') && target.record.symbol) {
       const symbols = await documentSymbols(editor.document.uri)
       const node = symbols ? resolveSymbolPath(symbols, target.record.symbol) : null
       if (node) {
         editor.selection = new vscode.Selection(node.range[0] - 1, 0, node.range[1] - 1, 0)
         await vscode.commands.executeCommand(
-          target.record.kind === 'class' ? 'vouch.class' : 'vouch.function')
+          target.record.kind === 'class' ? 'vouch.class' : 'vouch.function', target.record.id)
         return
       }
     }
@@ -275,7 +336,7 @@ export function registerCommands(
     const choice = await vscode.window.showInformationMessage(
       'Vouch: confirm or adjust the selection, then re-review.', 'Re-review selection')
     if (choice === 'Re-review selection') {
-      await vscode.commands.executeCommand('vouch.selection')
+      await vscode.commands.executeCommand('vouch.selection', target.record.id)
     }
   })
 
@@ -284,7 +345,7 @@ export function registerCommands(
       const orphans = root.store.orphans(p => fs.existsSync(path.join(root.rootDir, p)))
       if (orphans.length === 0) continue
       const oldPath = await vscode.window.showQuickPick(orphans,
-        { placeHolder: 'Vouch: orphaned reviews — pick the old path to re-attach' })
+        { placeHolder: 'Vouch: orphaned reviews — pick the old path to re-attach your reviews' })
       if (!oldPath) return
       const picked = await vscode.window.showOpenDialog({
         canSelectMany: false, defaultUri: vscode.Uri.file(root.rootDir),
@@ -299,8 +360,21 @@ export function registerCommands(
       if (!author) return
       const state = root.store.stateFor(oldPath)
       if (!state) return
+      // Re-attach moves only YOUR records: revocation is author-bound (a
+      // cross-author tombstone would be ignored on load), so moving a
+      // teammate's review is structurally impossible - explain instead of
+      // silently doing nothing.
+      const mine = state.current.filter(r =>
+        normalizeEmail(r.author.email) === normalizeEmail(author.email))
+      if (mine.length === 0) {
+        const owners = [...new Set(state.current.map(r => r.author.name))].join(', ')
+        void vscode.window.showInformationMessage(
+          `Vouch: the ${state.current.length} review(s) on ${oldPath} belong to ` +
+          `${owners} - each reviewer re-attaches their own records.`)
+        return
+      }
       const { copies, tombstones } = buildReattachLines(
-        state.current, newSourcePath, () => randomUUID(), new Date().toISOString(), author)
+        mine, newSourcePath, () => randomUUID(), new Date().toISOString(), author)
       try {
         // Tombstones to the OLD path first, then copies to the new path: if the
         // process dies mid-loop, the worst case is reviews are revoked but not
