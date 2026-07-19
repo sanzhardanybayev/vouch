@@ -21,8 +21,8 @@ export function supersedeCandidates(params: {
 }): { record: ReviewRecord; res: Resolution }[] {
   const { kind, symbol, range } = params
   return params.existingCurrent
-    .filter(e => normalizeEmail(e.record.author.email) === normalizeEmail(params.author.email))
-    .filter(e => {
+    .filter((e) => normalizeEmail(e.record.author.email) === normalizeEmail(params.author.email))
+    .filter((e) => {
       if (kind === 'file') return true
       if (symbol && e.record.symbol === symbol) return true
       return range ? encloses(range, e.res.effectiveRange) : false
@@ -54,10 +54,14 @@ export function buildRecord(params: {
   const { kind, range, docText } = params
 
   const superseded = params.explicitSupersedeOnly
-    ? [] : supersedeCandidates(params).map(e => e.record.id)
+    ? []
+    : supersedeCandidates(params).map((e) => e.record.id)
   if (params.supersedeId && !superseded.includes(params.supersedeId)) {
-    const target = params.existingCurrent.find(e => e.record.id === params.supersedeId &&
-      normalizeEmail(e.record.author.email) === normalizeEmail(params.author.email))
+    const target = params.existingCurrent.find(
+      (e) =>
+        e.record.id === params.supersedeId &&
+        normalizeEmail(e.record.author.email) === normalizeEmail(params.author.email),
+    )
     if (target) superseded.push(target.record.id)
   }
 
@@ -104,7 +108,9 @@ export function buildRecord(params: {
  * must abort rather than hash text the user never read.
  */
 export function rebaseRange(
-  snapshotText: string, range: [number, number], finalText: string,
+  snapshotText: string,
+  range: [number, number],
+  finalText: string,
 ): [number, number] | null {
   const { hash, headHash } = hashRangeOfText(snapshotText, range)
   const lines = splitLines(finalText)
@@ -121,15 +127,24 @@ export function rebaseRange(
 }
 
 export function buildReattachLines(
-  records: ReviewRecord[], newSourcePath: string,
-  idGen: () => string, nowIso: string, reattachedBy: Author,
+  records: ReviewRecord[],
+  newSourcePath: string,
+  idGen: () => string,
+  nowIso: string,
+  reattachedBy: Author,
 ): { copies: ReviewRecord[]; tombstones: Tombstone[] } {
   const copies: ReviewRecord[] = []
   const tombstones: Tombstone[] = []
   for (const r of records) {
     copies.push({ ...r, id: idGen(), movedFrom: r.id, supersedes: undefined })
-    tombstones.push({ id: idGen(), author: reattachedBy, createdAt: nowIso,
-      revokes: r.id, reason: 'moved', movedTo: newSourcePath })
+    tombstones.push({
+      id: idGen(),
+      author: reattachedBy,
+      createdAt: nowIso,
+      revokes: r.id,
+      reason: 'moved',
+      movedTo: newSourcePath,
+    })
   }
   return { copies, tombstones }
 }

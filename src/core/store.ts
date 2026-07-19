@@ -77,12 +77,13 @@ export class ReviewStore {
     exists: (sourcePath: string) => boolean,
     include: (sourcePath: string) => boolean = () => true,
   ): string[] {
-    return this.attestedFiles().filter(p => include(p) && !exists(p))
+    return this.attestedFiles().filter((p) => include(p) && !exists(p))
   }
 
-  counts(
-    include: (sourcePath: string) => boolean = () => true,
-  ): { records: number; perAuthor: Map<string, { name: string; current: number }> } {
+  counts(include: (sourcePath: string) => boolean = () => true): {
+    records: number
+    perAuthor: Map<string, { name: string; current: number }>
+  } {
     let records = 0
     // Keyed by normalized email so a case/whitespace-differing git config
     // never splits one reviewer into two rows; display name is first seen.
@@ -102,8 +103,15 @@ export class ReviewStore {
 
   perEngineer(include: (sourcePath: string) => boolean = () => true): EngineerSummary[] {
     // normalized email -> { display name/email (first seen), total, per-file counts }
-    const byEmail = new Map<string, {
-      name: string; email: string; total: number; perFile: Map<string, number> }>()
+    const byEmail = new Map<
+      string,
+      {
+        name: string
+        email: string
+        total: number
+        perFile: Map<string, number>
+      }
+    >()
     for (const [sourcePath, state] of this.bySource) {
       if (!include(sourcePath)) continue
       for (const r of state.current) {
@@ -131,11 +139,15 @@ export class ReviewStore {
 
 async function walk(dir: string): Promise<string[]> {
   let entries
-  try { entries = await readdir(dir, { withFileTypes: true }) } catch { return [] }
+  try {
+    entries = await readdir(dir, { withFileTypes: true })
+  } catch {
+    return []
+  }
   const out: string[] = []
   for (const e of entries) {
     const p = join(dir, e.name)
-    if (e.isDirectory()) out.push(...await walk(p))
+    if (e.isDirectory()) out.push(...(await walk(p)))
     else if (e.isFile() && e.name.endsWith('.jsonl')) out.push(p)
   }
   return out

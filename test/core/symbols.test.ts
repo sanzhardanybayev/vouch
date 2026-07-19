@@ -3,7 +3,9 @@ import { enclosingSymbol, resolveSymbolPath, type SymbolNode } from '../../src/c
 
 const TREE: SymbolNode[] = [
   {
-    name: 'AuthService', kindClass: 'class', range: [10, 100],
+    name: 'AuthService',
+    kindClass: 'class',
+    range: [10, 100],
     children: [
       { name: 'login', kindClass: 'function', range: [20, 40], children: [] },
       { name: 'logout', kindClass: 'function', range: [50, 60], children: [] },
@@ -14,19 +16,19 @@ const TREE: SymbolNode[] = [
 
 describe('enclosingSymbol', () => {
   it('finds deepest function containing line', () => {
-    expect(enclosingSymbol(TREE, 25, 'function'))
-      .toEqual({ path: 'AuthService/login', range: [20, 40] })
+    expect(enclosingSymbol(TREE, 25, 'function')).toEqual({
+      path: 'AuthService/login',
+      range: [20, 40],
+    })
   })
   it('finds class when asked for class', () => {
-    expect(enclosingSymbol(TREE, 25, 'class'))
-      .toEqual({ path: 'AuthService', range: [10, 100] })
+    expect(enclosingSymbol(TREE, 25, 'class')).toEqual({ path: 'AuthService', range: [10, 100] })
   })
   it('line inside class but outside methods → no function', () => {
     expect(enclosingSymbol(TREE, 45, 'function')).toBeNull()
   })
   it('top-level function', () => {
-    expect(enclosingSymbol(TREE, 115, 'function'))
-      .toEqual({ path: 'helper', range: [110, 120] })
+    expect(enclosingSymbol(TREE, 115, 'function')).toEqual({ path: 'helper', range: [110, 120] })
   })
   it('no symbol at line', () => {
     expect(enclosingSymbol(TREE, 105, 'function')).toBeNull()

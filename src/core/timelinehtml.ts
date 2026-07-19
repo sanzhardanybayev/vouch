@@ -1,8 +1,12 @@
 import { isValidSha, relTime } from './hovermd'
 
 export function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 export interface TimelineEntry {
@@ -19,8 +23,7 @@ export interface TimelineEntry {
 export interface TimelineInput {
   sourcePath: string
   nowIso: string
-  users: { name: string; email: string
-    chains: { entries: TimelineEntry[]; revoked: boolean }[] }[]
+  users: { name: string; email: string; chains: { entries: TimelineEntry[]; revoked: boolean }[] }[]
 }
 
 const GLYPH = { reviewed: '✓', dismissed: '⚠', ambiguous: '?', historical: '·' } as const
@@ -38,37 +41,55 @@ function entryHtml(e: TimelineEntry, nowIso: string): string {
   // exploitable the moment it's interpolated into an href attribute. The
   // sole current caller (panel.ts) only ever produces commitUrl() output
   // (https://...), so this is defense-in-depth, not a behavior change.
-  const shaHtml = !sha ? '' : e.commitLink && e.commitLink.startsWith('https://')
-    ? ` <a href="${escapeHtml(e.commitLink)}"><code>${escapeHtml(sha)}</code></a>`
-    : ` <code>${escapeHtml(sha)}</code>`
-  const what = e.symbol ? `${e.kind} ${e.symbol}`
-    : e.range ? `${e.kind} L${e.range[0]}–${e.range[1]}` : e.kind
+  const shaHtml = !sha
+    ? ''
+    : e.commitLink && e.commitLink.startsWith('https://')
+      ? ` <a href="${escapeHtml(e.commitLink)}"><code>${escapeHtml(sha)}</code></a>`
+      : ` <code>${escapeHtml(sha)}</code>`
+  const what = e.symbol
+    ? `${e.kind} ${e.symbol}`
+    : e.range
+      ? `${e.kind} L${e.range[0]}–${e.range[1]}`
+      : e.kind
   const comment = e.comment ? `<blockquote>${escapeHtml(e.comment)}</blockquote>` : ''
-  const resolveBtn = e.status === 'ambiguous'
-    ? ` <button data-cmd="resolveAmbiguous" data-id="${escapeHtml(e.recordId)}">Resolve</button>` : ''
-  const actions = (e.status === 'dismissed' || e.status === 'ambiguous'
-    ? ` <button data-cmd="reReview" data-id="${escapeHtml(e.recordId)}">Re-review</button>` : '') + resolveBtn
+  const resolveBtn =
+    e.status === 'ambiguous'
+      ? ` <button data-cmd="resolveAmbiguous" data-id="${escapeHtml(e.recordId)}">Resolve</button>`
+      : ''
+  const actions =
+    (e.status === 'dismissed' || e.status === 'ambiguous'
+      ? ` <button data-cmd="reReview" data-id="${escapeHtml(e.recordId)}">Re-review</button>`
+      : '') + resolveBtn
   // Every entry with a locatable scope gets a Go to button; kind 'file'
   // reveals the top of the file. Diff is offered for historical entries too -
   // diffing a superseded review against the current file is supported.
-  const goBtn = e.range || e.kind === 'file'
-    ? ` <button data-cmd="reveal" data-id="${escapeHtml(e.recordId)}">Go to</button>` : ''
+  const goBtn =
+    e.range || e.kind === 'file'
+      ? ` <button data-cmd="reveal" data-id="${escapeHtml(e.recordId)}">Go to</button>`
+      : ''
   const diffBtn = ` <button data-cmd="showDiff" data-id="${escapeHtml(e.recordId)}">Diff</button>`
-  return `<li class="${escapeHtml(e.status)}"><span class="glyph">${GLYPH[e.status]}</span> ` +
+  return (
+    `<li class="${escapeHtml(e.status)}"><span class="glyph">${GLYPH[e.status]}</span> ` +
     `<strong>${e.status}</strong> — ${escapeHtml(what)}, ${relTime(e.createdAt, nowIso)}` +
     `${shaHtml}${actions}${goBtn}${diffBtn}${comment}</li>`
+  )
 }
 
 export function timelineHtml(input: TimelineInput, cspSource: string, nonce: string): string {
-  const tabs = input.users.map((u, i) =>
-    `<button class="tab" data-tab="${i}">${escapeHtml(u.name)}</button>`).join('')
-  const panes = input.users.map((u, i) => {
-    const chains = u.chains.map(c => {
-      const list = `<ul>${c.entries.map(e => entryHtml(e, input.nowIso)).join('')}</ul>`
-      return c.revoked ? `<details><summary>revoked chain</summary>${list}</details>` : list
-    }).join('')
-    return `<section class="pane" data-pane="${i}">${chains}</section>`
-  }).join('')
+  const tabs = input.users
+    .map((u, i) => `<button class="tab" data-tab="${i}">${escapeHtml(u.name)}</button>`)
+    .join('')
+  const panes = input.users
+    .map((u, i) => {
+      const chains = u.chains
+        .map((c) => {
+          const list = `<ul>${c.entries.map((e) => entryHtml(e, input.nowIso)).join('')}</ul>`
+          return c.revoked ? `<details><summary>revoked chain</summary>${list}</details>` : list
+        })
+        .join('')
+      return `<section class="pane" data-pane="${i}">${chains}</section>`
+    })
+    .join('')
   return `<!DOCTYPE html><html><head>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' ${cspSource}; script-src 'nonce-${nonce}'">
 <style>

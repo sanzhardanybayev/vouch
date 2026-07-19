@@ -3,7 +3,10 @@ import { textFileCoverage } from '../../src/core/linecount'
 
 describe('textFileCoverage', () => {
   it('text buffer -> {0, N}', () => {
-    expect(textFileCoverage(Buffer.from('a\nb\nc\n', 'utf8'))).toEqual({ reviewedLines: 0, totalLines: 3 })
+    expect(textFileCoverage(Buffer.from('a\nb\nc\n', 'utf8'))).toEqual({
+      reviewedLines: 0,
+      totalLines: 3,
+    })
   })
 
   it('NUL byte within the first 8KB -> binary -> null', () => {
@@ -22,7 +25,13 @@ describe('textFileCoverage', () => {
   })
 
   it('CRLF text counts per convention (trailing newline adds no line)', () => {
-    expect(textFileCoverage(Buffer.from('a\r\nb\r\nc\r\n', 'utf8'))).toEqual({ reviewedLines: 0, totalLines: 3 })
-    expect(textFileCoverage(Buffer.from('a\r\nb\r\nc', 'utf8'))).toEqual({ reviewedLines: 0, totalLines: 3 })
+    expect(textFileCoverage(Buffer.from('a\r\nb\r\nc\r\n', 'utf8'))).toEqual({
+      reviewedLines: 0,
+      totalLines: 3,
+    })
+    expect(textFileCoverage(Buffer.from('a\r\nb\r\nc', 'utf8'))).toEqual({
+      reviewedLines: 0,
+      totalLines: 3,
+    })
   })
 })

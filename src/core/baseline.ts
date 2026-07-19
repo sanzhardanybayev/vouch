@@ -2,7 +2,8 @@ import { hashLines, normalizeEol, sha256, splitLines } from './text'
 import type { ReviewRecord } from './types'
 
 export function baselineSlice(
-  committedText: string, record: ReviewRecord,
+  committedText: string,
+  record: ReviewRecord,
 ): { text: string; verified: boolean } {
   if (record.kind === 'file') {
     return { text: committedText, verified: sha256(normalizeEol(committedText)) === record.hash }

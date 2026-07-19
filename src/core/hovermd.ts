@@ -60,26 +60,36 @@ export function rangeHoverMd(entries: HoverEntry[], nowIso: string): string {
   const parts: string[] = []
   for (const e of entries) {
     const sha = e.commit && isValidSha(e.commit) ? e.commit.slice(0, 7) : ''
-    const shaMd = !sha ? '' : e.commitLink && e.commitLink.startsWith('https://')
-      ? ` ([\`${sha}\`](${e.commitLink}))` : ` (\`${sha}\`)`
+    const shaMd = !sha
+      ? ''
+      : e.commitLink && e.commitLink.startsWith('https://')
+        ? ` ([\`${sha}\`](${e.commitLink}))`
+        : ` (\`${sha}\`)`
     parts.push(
-      `**${statusLabel(e.status)}** — ${escapeMd(e.authorName)}, ${relTime(e.createdAt, nowIso)}${shaMd}`)
+      `**${statusLabel(e.status)}** — ${escapeMd(e.authorName)}, ${relTime(e.createdAt, nowIso)}${shaMd}`,
+    )
     if (e.comment) {
-      const quoted = e.comment.split(/\r?\n/).map(line => `> ${escapeMd(line)}`).join('\n')
+      const quoted = e.comment
+        .split(/\r?\n/)
+        .map((line) => `> ${escapeMd(line)}`)
+        .join('\n')
       parts.push(quoted)
     }
     // Plain text on purpose - the count is a number we computed ourselves,
     // and the existing "Open timeline" link is the navigation for it.
     if (e.supersedesCount && e.supersedesCount > 0) {
-      parts.push(`supersedes ${e.supersedesCount} earlier review${e.supersedesCount > 1 ? 's' : ''}`)
+      parts.push(
+        `supersedes ${e.supersedesCount} earlier review${e.supersedesCount > 1 ? 's' : ''}`,
+      )
     }
-    const resolve = e.status === 'ambiguous'
-      ? `[Resolve](${cmd('vouch.resolveAmbiguous', e.recordId)}) · ` : ''
+    const resolve =
+      e.status === 'ambiguous' ? `[Resolve](${cmd('vouch.resolveAmbiguous', e.recordId)}) · ` : ''
     parts.push(
       resolve +
-      `[Open timeline](${cmd('vouch.openTimeline', e.recordId)}) · ` +
-      `[Diff since review](${cmd('vouch.showDiff', e.recordId)}) · ` +
-      `[Re-review](${cmd('vouch.reReview', e.recordId)})`)
+        `[Open timeline](${cmd('vouch.openTimeline', e.recordId)}) · ` +
+        `[Diff since review](${cmd('vouch.showDiff', e.recordId)}) · ` +
+        `[Re-review](${cmd('vouch.reReview', e.recordId)})`,
+    )
   }
   return parts.join('\n\n')
 }
@@ -88,7 +98,10 @@ export function callSiteMd(
   entries: { authorName: string; status: Status; createdAt: string }[],
   nowIso: string,
 ): string {
-  return entries.map(e =>
-    `Vouch: ${statusLabel(e.status)} — ${escapeMd(e.authorName)}, ${relTime(e.createdAt, nowIso)}`,
-  ).join('\n\n')
+  return entries
+    .map(
+      (e) =>
+        `Vouch: ${statusLabel(e.status)} — ${escapeMd(e.authorName)}, ${relTime(e.createdAt, nowIso)}`,
+    )
+    .join('\n\n')
 }

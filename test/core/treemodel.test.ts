@@ -4,23 +4,25 @@ import { buildTree, headerStats, type TreeFile } from '../../src/core/treemodel'
 const FILES: TreeFile[] = [
   { path: 'src/a.ts', coverage: { reviewedLines: 5, totalLines: 10 }, reviewed: true },
   { path: 'src/sub/b.ts', coverage: { reviewedLines: 10, totalLines: 10 }, reviewed: true },
-  { path: 'src/c.ts', coverage: null, reviewed: false },          // no records
+  { path: 'src/c.ts', coverage: null, reviewed: false }, // no records
   { path: 'README.md', coverage: null, reviewed: false },
 ]
 
 describe('buildTree', () => {
   it('nests folders and rolls up attested descendants only', () => {
     const root = buildTree(FILES)
-    const src = root.folders.find(f => f.name === 'src')!
-    expect(src.files.map(f => f.path).sort()).toEqual(['src/a.ts', 'src/c.ts'])
+    const src = root.folders.find((f) => f.name === 'src')!
+    expect(src.files.map((f) => f.path).sort()).toEqual(['src/a.ts', 'src/c.ts'])
     expect(src.folders[0]!.name).toBe('sub')
     expect(src.coverage).toEqual({ reviewedLines: 15, totalLines: 20 }) // c.ts excluded
-    expect(root.files.map(f => f.path)).toEqual(['README.md'])
+    expect(root.files.map((f) => f.path)).toEqual(['README.md'])
     expect(root.coverage).toEqual({ reviewedLines: 15, totalLines: 20 })
   })
   it('pending descendant → pending folder', () => {
-    const root = buildTree([{ path: 'src/a.ts', coverage: 'pending', reviewed: false },
-      { path: 'src/b.ts', coverage: { reviewedLines: 1, totalLines: 2 }, reviewed: true }])
+    const root = buildTree([
+      { path: 'src/a.ts', coverage: 'pending', reviewed: false },
+      { path: 'src/b.ts', coverage: { reviewedLines: 1, totalLines: 2 }, reviewed: true },
+    ])
     expect(root.folders[0]!.coverage).toBe('pending')
     expect(root.coverage).toBe('pending')
   })
@@ -41,10 +43,18 @@ describe('headerStats', () => {
     expect(h.perAuthor).toEqual([{ name: 'San', current: 3 }])
   })
   it('pending propagates; no attested files → null pct', () => {
-    expect(headerStats([{ path: 'a', coverage: 'pending', reviewed: false }], 1,
-      { records: 0, perAuthor: new Map() }).pending).toBe(true)
-    expect(headerStats([{ path: 'a', coverage: null, reviewed: false }], 1,
-      { records: 0, perAuthor: new Map() }).workspacePct).toBeNull()
+    expect(
+      headerStats([{ path: 'a', coverage: 'pending', reviewed: false }], 1, {
+        records: 0,
+        perAuthor: new Map(),
+      }).pending,
+    ).toBe(true)
+    expect(
+      headerStats([{ path: 'a', coverage: null, reviewed: false }], 1, {
+        records: 0,
+        perAuthor: new Map(),
+      }).workspacePct,
+    ).toBeNull()
   })
 })
 
@@ -56,7 +66,7 @@ describe('buildTree honest rollups (v1.1)', () => {
       { path: 'src/c.ts', coverage: { reviewedLines: 0, totalLines: 20 }, reviewed: false },
     ]
     const root = buildTree(files)
-    const src = root.folders.find(f => f.name === 'src')!
+    const src = root.folders.find((f) => f.name === 'src')!
     // 10 reviewed of 40 total = 25%, NOT 100%
     expect(src.coverage).toEqual({ reviewedLines: 10, totalLines: 40 })
   })
@@ -67,7 +77,7 @@ describe('buildTree honest rollups (v1.1)', () => {
       { path: 'src/logo.png', coverage: null, reviewed: false }, // binary → excluded
     ]
     const root = buildTree(files)
-    const src = root.folders.find(f => f.name === 'src')!
+    const src = root.folders.find((f) => f.name === 'src')!
     expect(src.coverage).toEqual({ reviewedLines: 5, totalLines: 10 })
   })
 })
@@ -89,13 +99,22 @@ describe('headerStats (v1.1)', () => {
 
   it('no reviews anywhere → workspacePct 0 when files exist, null when no counted files', () => {
     const counts = { records: 0, perAuthor: new Map() }
-    expect(headerStats([{ path: 'a.ts', coverage: { reviewedLines: 0, totalLines: 5 }, reviewed: false }],
-      1, counts).workspacePct).toBe(0)
-    expect(headerStats([{ path: 'a.png', coverage: null, reviewed: false }], 1, counts).workspacePct).toBeNull()
+    expect(
+      headerStats(
+        [{ path: 'a.ts', coverage: { reviewedLines: 0, totalLines: 5 }, reviewed: false }],
+        1,
+        counts,
+      ).workspacePct,
+    ).toBe(0)
+    expect(
+      headerStats([{ path: 'a.png', coverage: null, reviewed: false }], 1, counts).workspacePct,
+    ).toBeNull()
   })
 
   it('pending propagates', () => {
     const counts = { records: 0, perAuthor: new Map() }
-    expect(headerStats([{ path: 'a.ts', coverage: 'pending', reviewed: false }], 1, counts).pending).toBe(true)
+    expect(
+      headerStats([{ path: 'a.ts', coverage: 'pending', reviewed: false }], 1, counts).pending,
+    ).toBe(true)
   })
 })

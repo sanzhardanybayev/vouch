@@ -18,8 +18,7 @@ const isStr = (v: unknown): v is string => typeof v === 'string'
 const optStr = (v: unknown): boolean => v === undefined || typeof v === 'string'
 
 function validAuthor(a: unknown): a is Author {
-  return !!a && typeof a === 'object' &&
-    isStr((a as Author).name) && isStr((a as Author).email)
+  return !!a && typeof a === 'object' && isStr((a as Author).name) && isStr((a as Author).email)
 }
 
 // Open validation: only the fields we consume are checked; unknown extra
@@ -41,7 +40,15 @@ function validLine(obj: unknown): obj is VouchLine {
     if (typeof s !== 'number' || typeof e !== 'number') return false
     if (!Number.isInteger(s) || !Number.isInteger(e) || s < 1 || e < s) return false
   }
-  for (const k of ['headHash', 'symbol', 'anchorSymbol', 'comment', 'movedFrom', 'ctxBefore', 'ctxAfter']) {
+  for (const k of [
+    'headHash',
+    'symbol',
+    'anchorSymbol',
+    'comment',
+    'movedFrom',
+    'ctxBefore',
+    'ctxAfter',
+  ]) {
     if (!optStr(o[k])) return false
   }
   if (o.supersedes !== undefined) {
@@ -84,14 +91,17 @@ export function parseJsonl(content: string): { lines: VouchLine[]; corrupt: numb
 //   merge=union duplicate); differing content -> drop ALL and count corrupt,
 //   so no platform-dependent readdir order ever picks a winner.
 export function dedupeById(lines: VouchLine[]): { lines: VouchLine[]; corrupt: number } {
-  const tombIds = new Set(lines.filter(isTombstone).map(t => t.id))
+  const tombIds = new Set(lines.filter(isTombstone).map((t) => t.id))
   const out: VouchLine[] = []
   const seenTombs = new Set<string>()
   const recGroups = new Map<string, ReviewRecord[]>()
   for (const l of lines) {
     if (isTombstone(l)) {
       const key = JSON.stringify(l)
-      if (!seenTombs.has(key)) { seenTombs.add(key); out.push(l) }
+      if (!seenTombs.has(key)) {
+        seenTombs.add(key)
+        out.push(l)
+      }
       continue
     }
     if (tombIds.has(l.id)) continue
@@ -101,7 +111,7 @@ export function dedupeById(lines: VouchLine[]): { lines: VouchLine[]; corrupt: n
   }
   let corrupt = 0
   for (const g of recGroups.values()) {
-    const distinct = new Set(g.map(r => JSON.stringify(r)))
+    const distinct = new Set(g.map((r) => JSON.stringify(r)))
     if (distinct.size === 1) out.push(g[0]!)
     else corrupt += g.length
   }
@@ -156,7 +166,7 @@ export function resolveChains(all: VouchLine[], movedIndex?: MovedIndex): ChainS
 
   const records = all.filter((l): l is ReviewRecord => !isTombstone(l))
   const tombs = all.filter(isTombstone)
-  const byId = new Map(records.map(r => [r.id, r]))
+  const byId = new Map(records.map((r) => [r.id, r]))
   const sameAuthor = (a: Author, b: Author): boolean =>
     normalizeEmail(a.email) === normalizeEmail(b.email)
 
@@ -185,8 +195,10 @@ export function resolveChains(all: VouchLine[], movedIndex?: MovedIndex): ChainS
     const target = byId.get(t.revokes)
     if (!target) return false
     const copies = movedIndex?.get(t.revokes) ?? []
-    return copies.some(c =>
-      normalizeEmail(c.email) === normalizeEmail(target.author.email) && c.hash === target.hash)
+    return copies.some(
+      (c) =>
+        normalizeEmail(c.email) === normalizeEmail(target.author.email) && c.hash === target.hash,
+    )
   }
 
   // Revocation is per-author-partition, never per whole chain: a foreign
@@ -212,10 +224,11 @@ export function resolveChains(all: VouchLine[], movedIndex?: MovedIndex): ChainS
   const current: ReviewRecord[] = []
   const revokedChains = new Set<string>()
   for (const [root, members] of chains) {
-    members.sort((a, b) =>
-      parsedTime(a.createdAt) - parsedTime(b.createdAt) || (a.id < b.id ? -1 : 1))
+    members.sort(
+      (a, b) => parsedTime(a.createdAt) - parsedTime(b.createdAt) || (a.id < b.id ? -1 : 1),
+    )
     for (const m of members) chainOf.set(m.id, root)
-    if (members.every(m => revokedIds.has(m.id))) revokedChains.add(root)
+    if (members.every((m) => revokedIds.has(m.id))) revokedChains.add(root)
     // Tips are selected per author partition: honored supersedes edges are
     // same-author-only, so authors sharing a chain (via absent-ancestor
     // unions) each own an independent lineage - a foreign record with a
@@ -223,7 +236,7 @@ export function resolveChains(all: VouchLine[], movedIndex?: MovedIndex): ChainS
     // review. Within a partition, a hand-made cycle (only producible by
     // edited data) yields zero unsuperseded tips; fall back to all alive
     // members so an unrevoked lineage never silently vanishes.
-    const alive = members.filter(m => !revokedIds.has(m.id))
+    const alive = members.filter((m) => !revokedIds.has(m.id))
     if (alive.length === 0) continue
     const byAuthor = new Map<string, ReviewRecord[]>()
     for (const m of alive) {
@@ -233,7 +246,7 @@ export function resolveChains(all: VouchLine[], movedIndex?: MovedIndex): ChainS
       byAuthor.set(key, g)
     }
     for (const g of byAuthor.values()) {
-      let tips = g.filter(m => !superseded.has(m.id))
+      let tips = g.filter((m) => !superseded.has(m.id))
       if (tips.length === 0) tips = g
       current.push(tips[tips.length - 1]!)
     }

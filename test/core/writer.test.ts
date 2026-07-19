@@ -7,13 +7,23 @@ import { parseJsonl } from '../../src/core/records'
 import type { ReviewRecord } from '../../src/core/types'
 
 let dir: string
-beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'vouch-')) })
-afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+beforeEach(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'vouch-'))
+})
+afterEach(async () => {
+  await rm(dir, { recursive: true, force: true })
+})
 
 const REC: ReviewRecord = {
-  id: 'r1', author: { name: 'S', email: 's@x.com' }, createdAt: '2026-01-01T00:00:00Z',
-  commit: 'c', dirty: false, kind: 'selection', range: [1, 2],
-  hash: 'sha256:aa', headHash: 'sha256:bb',
+  id: 'r1',
+  author: { name: 'S', email: 's@x.com' },
+  createdAt: '2026-01-01T00:00:00Z',
+  commit: 'c',
+  dirty: false,
+  kind: 'selection',
+  range: [1, 2],
+  hash: 'sha256:aa',
+  headHash: 'sha256:bb',
 }
 
 describe('appendLine', () => {
@@ -22,7 +32,7 @@ describe('appendLine', () => {
     await appendLine(dir, 'src/a.ts', 'a1b2c3d4', { ...REC, id: 'r2' })
     const content = await readFile(join(dir, '.vouch/reviews/src/a.ts/a1b2c3d4.jsonl'), 'utf8')
     const { lines, corrupt } = parseJsonl(content)
-    expect(lines.map(l => l.id)).toEqual(['r1', 'r2'])
+    expect(lines.map((l) => l.id)).toEqual(['r1', 'r2'])
     expect(corrupt).toBe(0)
     expect(content.endsWith('\n')).toBe(true)
   })
@@ -35,7 +45,7 @@ describe('initVouch', () => {
     const cfg = JSON.parse(await readFile(join(dir, '.vouch/config.json'), 'utf8'))
     expect(cfg.schemaVersion).toBe(1)
     const attrs = await readFile(join(dir, '.gitattributes'), 'utf8')
-    expect(attrs.split('\n').filter(l => l === '.vouch/reviews/** merge=union')).toHaveLength(1)
+    expect(attrs.split('\n').filter((l) => l === '.vouch/reviews/** merge=union')).toHaveLength(1)
   })
   it('preserves an existing .gitattributes', async () => {
     const { writeFile } = await import('node:fs/promises')
@@ -58,10 +68,15 @@ describe('initVouch', () => {
 describe('initVouch — CRLF .gitattributes', () => {
   it('does not duplicate the merge=union line in a CRLF file', async () => {
     const { writeFile } = await import('node:fs/promises')
-    await writeFile(join(dir, '.gitattributes'), '*.png binary\r\n.vouch/reviews/** merge=union\r\n')
+    await writeFile(
+      join(dir, '.gitattributes'),
+      '*.png binary\r\n.vouch/reviews/** merge=union\r\n',
+    )
     await initVouch(dir)
     const attrs = await readFile(join(dir, '.gitattributes'), 'utf8')
-    const occurrences = attrs.split(/\r?\n/).filter(l => l.trim() === '.vouch/reviews/** merge=union')
+    const occurrences = attrs
+      .split(/\r?\n/)
+      .filter((l) => l.trim() === '.vouch/reviews/** merge=union')
     expect(occurrences).toHaveLength(1)
   })
 })

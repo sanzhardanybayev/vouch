@@ -7,7 +7,9 @@ import { existsSync } from 'node:fs'
 import { repoRoot, identity, headSha, isDirty, showAtCommit } from '../../src/vscode/gitinfo'
 
 let dir: string
-function sh(args: string[]): void { execFileSync('git', args, { cwd: dir }) }
+function sh(args: string[]): void {
+  execFileSync('git', args, { cwd: dir })
+}
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'vouch-git-'))
@@ -16,9 +18,12 @@ beforeEach(async () => {
   sh(['config', 'user.email', 't@x.com'])
   await mkdir(join(dir, 'src'), { recursive: true })
   await writeFile(join(dir, 'src/a.ts'), 'one\ntwo\n')
-  sh(['add', '-A']); sh(['commit', '-q', '-m', 'init'])
+  sh(['add', '-A'])
+  sh(['commit', '-q', '-m', 'init'])
 })
-afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+afterEach(async () => {
+  await rm(dir, { recursive: true, force: true })
+})
 
 describe('gitinfo', () => {
   it('repoRoot finds the root from a subdirectory', async () => {
@@ -49,7 +54,10 @@ describe('gitinfo', () => {
   })
   it('null outside a repo', async () => {
     const outside = await mkdtemp(join(tmpdir(), 'vouch-norepo-'))
-    try { expect(await repoRoot(outside)).toBeNull() }
-    finally { await rm(outside, { recursive: true, force: true }) }
+    try {
+      expect(await repoRoot(outside)).toBeNull()
+    } finally {
+      await rm(outside, { recursive: true, force: true })
+    }
   })
 })

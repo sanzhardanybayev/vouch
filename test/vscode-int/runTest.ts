@@ -12,8 +12,11 @@ async function main(): Promise<void> {
   const ws = mkdtempSync(path.join(tmpdir(), 'vouch-fixture-'))
   cpSync(fixtureSrc, ws, { recursive: true })
   const g = (args: string[]) => execFileSync('git', args, { cwd: ws })
-  g(['init', '-q']); g(['config', 'user.name', 'Int Test']); g(['config', 'user.email', 'int@test.dev'])
-  g(['add', '-A']); g(['commit', '-q', '-m', 'fixture', '--allow-empty'])
+  g(['init', '-q'])
+  g(['config', 'user.name', 'Int Test'])
+  g(['config', 'user.email', 'int@test.dev'])
+  g(['add', '-A'])
+  g(['commit', '-q', '-m', 'fixture', '--allow-empty'])
   // Short user-data-dir: VS Code listens on a unix socket inside it, and
   // macOS caps socket paths at 104 bytes - the default .vscode-test/user-data
   // under a deep checkout path exceeds that and the app fails to launch.
@@ -24,4 +27,7 @@ async function main(): Promise<void> {
     launchArgs: [ws, '--disable-extensions', `--user-data-dir=${userDataDir}`],
   })
 }
-main().catch(err => { console.error(err); process.exit(1) })
+main().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})

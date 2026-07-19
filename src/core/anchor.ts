@@ -14,14 +14,18 @@ const wants = (n: SymbolNode, want: SymbolWant): boolean =>
   want === 'any' ? n.kindClass !== 'other' : n.kindClass === want
 
 export function enclosingSymbol(
-  roots: SymbolNode[], line: number, want: 'function' | 'class',
+  roots: SymbolNode[],
+  line: number,
+  want: 'function' | 'class',
 ): { path: string; range: [number, number] } | null {
   return enclosingSymbolOfRange(roots, [line, line], want)
 }
 
 /** Deepest function/class symbol whose range encloses the WHOLE given range. */
 export function enclosingSymbolOfRange(
-  roots: SymbolNode[], range: [number, number], want: SymbolWant,
+  roots: SymbolNode[],
+  range: [number, number],
+  want: SymbolWant,
 ): { path: string; range: [number, number] } | null {
   let best: { path: string; range: [number, number]; depth: number } | null = null
   const visit = (nodes: SymbolNode[], prefix: string[], depth: number): void => {
@@ -35,10 +39,12 @@ export function enclosingSymbolOfRange(
     }
   }
   visit(roots, [], 0)
-  return best === null ? null : {
-    path: (best as { path: string }).path,
-    range: (best as { range: [number, number] }).range,
-  }
+  return best === null
+    ? null
+    : {
+        path: (best as { path: string }).path,
+        range: (best as { range: [number, number] }).range,
+      }
 }
 
 /** Every node matching the hierarchical path — duplicates (overloads, copies)
@@ -47,8 +53,8 @@ export function resolveSymbolPathAll(roots: SymbolNode[], path: string): SymbolN
   let level = roots
   let matches: SymbolNode[] = []
   for (const [i, seg] of path.split('/').entries()) {
-    const pool = i === 0 ? level : matches.flatMap(n => n.children)
-    matches = pool.filter(n => n.name === seg)
+    const pool = i === 0 ? level : matches.flatMap((n) => n.children)
+    matches = pool.filter((n) => n.name === seg)
     if (matches.length === 0) return []
     level = []
   }
@@ -76,16 +82,19 @@ const CTX_LINES = 2
 
 /** Per-document scan accelerator; build ONCE per text and share across all
  * records of the file so full-file scans stay linear per refresh. */
-export interface LineIndex { lines: string[]; lineHashes: string[] | null }
+export interface LineIndex {
+  lines: string[]
+  lineHashes: string[] | null
+}
 
 export function buildLineIndex(docText: string): LineIndex {
   const lines = splitLines(docText)
   // Gate on REAL line count: splitLines keeps the trailing empty segment of a
   // newline-terminated file, and a boundary file must not silently lose the
   // full scan (bounded path would false-dismiss ordinary insert-above edits).
-  const realLines = lines.length > 1 && lines[lines.length - 1] === ''
-    ? lines.length - 1 : lines.length
-  const lineHashes = realLines <= HUGE_FILE_LINES ? lines.map(l => sha256(l)) : null
+  const realLines =
+    lines.length > 1 && lines[lines.length - 1] === '' ? lines.length - 1 : lines.length
+  const lineHashes = realLines <= HUGE_FILE_LINES ? lines.map((l) => sha256(l)) : null
   return { lines, lineHashes }
 }
 
@@ -93,7 +102,8 @@ export function buildLineIndex(docText: string): LineIndex {
  * a range. Top/bottom of file hash the empty string, so capture and resolve
  * agree without a sentinel. */
 export function ctxHashes(
-  lines: string[], range: [number, number],
+  lines: string[],
+  range: [number, number],
 ): { before: string; after: string } {
   const before = lines.slice(Math.max(0, range[0] - 1 - CTX_LINES), Math.max(0, range[0] - 1))
   const after = lines.slice(range[1], range[1] + CTX_LINES)
@@ -101,7 +111,8 @@ export function ctxHashes(
 }
 
 export function hashRangeOfText(
-  docText: string, range: [number, number],
+  docText: string,
+  range: [number, number],
 ): { hash: string; headHash: string } {
   const lines = splitLines(docText)
   const slice = lines.slice(range[0] - 1, range[1])
@@ -121,8 +132,10 @@ export function hashRangeOfText(
  * an empty array for those cases — see vscode/symbols.ts.
  */
 export function resolveRecord(
-  rec: ReviewRecord, docText: string,
-  symbols: SymbolNode[] | null = null, index?: LineIndex,
+  rec: ReviewRecord,
+  docText: string,
+  symbols: SymbolNode[] | null = null,
+  index?: LineIndex,
 ): Resolution {
   const idx = index ?? buildLineIndex(docText)
   const lines = idx.lines
@@ -138,7 +151,9 @@ export function resolveRecord(
   if (!Number.isInteger(len) || len < 1) return dismissedAt(stored, lines)
 
   const windowMatches = (i: number): boolean =>
-    Number.isInteger(i) && i >= 0 && i + len <= lines.length &&
+    Number.isInteger(i) &&
+    i >= 0 &&
+    i + len <= lines.length &&
     hashLines(lines.slice(i, i + len)) === rec.hash
   const rangeOf = (i: number): [number, number] => [i + 1, i + len]
   const hasCtx = typeof rec.ctxBefore === 'string' && typeof rec.ctxAfter === 'string'
@@ -152,7 +167,11 @@ export function resolveRecord(
     const sorted = [...cands]
       .sort((a, b) => Math.abs(a - (stored[0] - 1)) - Math.abs(b - (stored[0] - 1)) || a - b)
       .slice(0, CONFIRM_CAP)
-    return { status: 'ambiguous', effectiveRange: rangeOf(sorted[0]!), candidates: sorted.map(rangeOf) }
+    return {
+      status: 'ambiguous',
+      effectiveRange: rangeOf(sorted[0]!),
+      candidates: sorted.map(rangeOf),
+    }
   }
 
   // Location signal: `symbol` (function/class kinds) or `anchorSymbol`
@@ -201,8 +220,9 @@ export function resolveRecord(
         // out of the reviewed (top-level) context. Ambiguous, not dismissed:
         // a warming language server can mint a stale sentinel at capture, so
         // this must stay recoverable through the resolve flow.
-        const topLevel = candidates.filter(i =>
-          enclosingSymbolOfRange(symbols, rangeOf(i), 'any') === null)
+        const topLevel = candidates.filter(
+          (i) => enclosingSymbolOfRange(symbols, rangeOf(i), 'any') === null,
+        )
         if (topLevel.length === 0) return ambiguousAt(candidates)
         candidates = topLevel
       } else {
@@ -216,15 +236,20 @@ export function resolveRecord(
           // proving a single candidate exactly at the stored range with ctx
           // not contradicting - so 0.0.2 records over overloaded functions
           // don't regress from green to amber on untouched code.
-          if (complete && candidates.length === 1 && atStored(candidates[0]!) &&
-            (!hasCtx || ctxOk(candidates[0]!))) {
+          if (
+            complete &&
+            candidates.length === 1 &&
+            atStored(candidates[0]!) &&
+            (!hasCtx || ctxOk(candidates[0]!))
+          ) {
             return reviewedAt(candidates[0]!)
           }
           // Otherwise only candidates inside SOME occurrence may resolve; a
           // ctx survivor OUTSIDE every occurrence would be a green the
           // symbol signal affirmatively contradicts.
-          const insideAny = candidates.filter(i =>
-            matches.some(m => i + 1 >= m.range[0] && i + len <= m.range[1]))
+          const insideAny = candidates.filter((i) =>
+            matches.some((m) => i + 1 >= m.range[0] && i + len <= m.range[1]),
+          )
           if (insideAny.length === 0) {
             return complete ? dismissedAt(stored, lines) : ambiguousAt(candidates)
           }
@@ -232,7 +257,7 @@ export function resolveRecord(
           return surv.length === 1 ? reviewedAt(surv[0]!) : ambiguousAt(insideAny)
         }
         const [ss, se] = matches[0]!.range
-        const inside = candidates.filter(i => i + 1 >= ss && i + len <= se)
+        const inside = candidates.filter((i) => i + 1 >= ss && i + len <= se)
         if (inside.length === 0) return dismissedAt(stored, lines) // moved out of context
         candidates = inside
       }
@@ -240,8 +265,12 @@ export function resolveRecord(
       // Symbol recorded but unverifiable: reviewed only for the lowest-risk
       // shape — a complete scan proving a single candidate that sits exactly
       // at the stored range with ctx agreeing (or no ctx recorded).
-      if (complete && candidates.length === 1 && atStored(candidates[0]!) &&
-        (!hasCtx || ctxOk(candidates[0]!))) {
+      if (
+        complete &&
+        candidates.length === 1 &&
+        atStored(candidates[0]!) &&
+        (!hasCtx || ctxOk(candidates[0]!))
+      ) {
         return reviewedAt(candidates[0]!)
       }
       return ambiguousAt(candidates)

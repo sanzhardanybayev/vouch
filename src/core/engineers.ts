@@ -1,7 +1,11 @@
 import type { EngineerSummary } from './store'
 import { normalizeEmail } from './paths'
 
-export interface AggregatedEngineerFile<R> { root: R; sourcePath: string; count: number }
+export interface AggregatedEngineerFile<R> {
+  root: R
+  sourcePath: string
+  count: number
+}
 export interface AggregatedEngineer<R> {
   name: string
   email: string
@@ -31,12 +35,23 @@ export function aggregateEngineers<R>(
   const byEmail = new Map<string, AggregatedEngineer<R>>()
   for (const root of roots) {
     for (const e of summariesOf(root)) {
-      const taggedFiles = e.files.map(f => ({ root, sourcePath: f.sourcePath, count: f.count }))
+      const taggedFiles = e.files.map((f) => ({ root, sourcePath: f.sourcePath, count: f.count }))
       const key = normalizeEmail(e.email)
       const ex = byEmail.get(key)
-      if (!ex) byEmail.set(key, { name: e.name, email: e.email, reviewCount: e.reviewCount, files: taggedFiles })
-      else { ex.reviewCount += e.reviewCount; ex.files.push(...taggedFiles) }
+      if (!ex)
+        byEmail.set(key, {
+          name: e.name,
+          email: e.email,
+          reviewCount: e.reviewCount,
+          files: taggedFiles,
+        })
+      else {
+        ex.reviewCount += e.reviewCount
+        ex.files.push(...taggedFiles)
+      }
     }
   }
-  return [...byEmail.values()].sort((a, b) => b.reviewCount - a.reviewCount || a.name.localeCompare(b.name))
+  return [...byEmail.values()].sort(
+    (a, b) => b.reviewCount - a.reviewCount || a.name.localeCompare(b.name),
+  )
 }

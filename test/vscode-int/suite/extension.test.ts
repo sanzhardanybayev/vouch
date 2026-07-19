@@ -20,7 +20,10 @@ describe('activation', () => {
     const fileUri = vscode.Uri.joinPath(folder.uri, 'src', 'calc.ts')
     const doc = await vscode.workspace.openTextDocument(fileUri)
     const context = api.getTestApi().context
-    assert.ok(context.rootFor(doc.uri), 'rootFor should resolve a root even through symlinked workspace paths')
+    assert.ok(
+      context.rootFor(doc.uri),
+      'rootFor should resolve a root even through symlinked workspace paths',
+    )
     assert.strictEqual(context.sourcePathOf(doc.uri), 'src/calc.ts')
   })
 })
@@ -58,15 +61,18 @@ describe('status pipeline', () => {
     const ws = vscode.workspace.workspaceFolders![0]!.uri.fsPath
     const doc = await vscode.workspace.openTextDocument(path.join(ws, 'src/calc.ts'))
     const editor = await vscode.window.showTextDocument(doc)
-    const api = (await vscode.extensions.getExtension('sanzhardanybayev.vouch-review-coverage')!.activate()).getTestApi()
+    const api = (
+      await vscode.extensions.getExtension('sanzhardanybayev.vouch-review-coverage')!.activate()
+    ).getTestApi()
 
     let st = await api.pipeline.statusFor(doc)
     assert.strictEqual(st.entries.length, 1) // record from the Task 11 test
     assert.strictEqual(st.entries[0].res.status, 'reviewed')
     assert.deepStrictEqual(st.entries[0].res.effectiveRange, [1, 3])
 
-    await editor.edit(b => b.replace(
-      new vscode.Range(1, 0, 1, doc.lineAt(1).text.length), '  return a + b + 1'))
+    await editor.edit((b) =>
+      b.replace(new vscode.Range(1, 0, 1, doc.lineAt(1).text.length), '  return a + b + 1'),
+    )
     st = await api.pipeline.statusFor(doc)
     assert.strictEqual(st.entries[0].res.status, 'dismissed')
 
@@ -80,9 +86,14 @@ describe('range hover', () => {
     const doc = await vscode.workspace.openTextDocument(path.join(ws, 'src/calc.ts'))
     await vscode.window.showTextDocument(doc)
     const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
-      'vscode.executeHoverProvider', doc.uri, new vscode.Position(0, 2))
-    const all = hovers.flatMap(h => h.contents)
-      .map(c => typeof c === 'string' ? c : (c as vscode.MarkdownString).value).join('\n')
+      'vscode.executeHoverProvider',
+      doc.uri,
+      new vscode.Position(0, 2),
+    )
+    const all = hovers
+      .flatMap((h) => h.contents)
+      .map((c) => (typeof c === 'string' ? c : (c as vscode.MarkdownString).value))
+      .join('\n')
     assert.match(all, /reviewed|dismissed/)
     assert.match(all, /Vouch|timeline/i)
   })
@@ -91,19 +102,23 @@ describe('range hover', () => {
 describe('sidebar', () => {
   it('tree provider returns header + fixture tree', async () => {
     // Allow the background queue a moment
-    await new Promise(r => setTimeout(r, 500))
+    await new Promise((r) => setTimeout(r, 500))
     await vscode.commands.executeCommand<unknown>('workbench.view.extension.vouch')
     // The command just focuses the view; real assertion is via the test api:
-    const api = (await vscode.extensions.getExtension('sanzhardanybayev.vouch-review-coverage')!.activate()).getTestApi()
+    const api = (
+      await vscode.extensions.getExtension('sanzhardanybayev.vouch-review-coverage')!.activate()
+    ).getTestApi()
     assert.ok(api.context.roots.length >= 1)
   })
 })
 
 describe('v1.1 honest coverage + reviewers', () => {
   it('sidebar exposes engineers and wires real coverage end-to-end', async () => {
-    const api = (await vscode.extensions.getExtension('sanzhardanybayev.vouch-review-coverage')!.activate()).getTestApi()
+    const api = (
+      await vscode.extensions.getExtension('sanzhardanybayev.vouch-review-coverage')!.activate()
+    ).getTestApi()
     // Let the background queue settle (it now counts every tracked file).
-    await new Promise(r => setTimeout(r, 1500))
+    await new Promise((r) => setTimeout(r, 1500))
     const root = api.context.roots[0]!
     // perEngineer surfaces the fixture author.
     const eng = root.store.perEngineer()
@@ -119,7 +134,11 @@ describe('v1.1 honest coverage + reviewers', () => {
     assert.ok(header.totalFiles >= 1, 'at least one tracked file')
     assert.ok(header.reviewedFiles >= 1, 'at least one reviewed file')
     assert.ok(header.reviewedFiles <= header.totalFiles, 'reviewed cannot exceed total')
-    assert.strictEqual(typeof header.workspacePct, 'number', 'workspacePct is a finite number once reviews exist')
+    assert.strictEqual(
+      typeof header.workspacePct,
+      'number',
+      'workspacePct is a finite number once reviews exist',
+    )
     assert.ok(header.workspacePct! >= 0 && header.workspacePct! <= 100, 'workspacePct in [0,100]')
 
     // Belt-and-suspenders: the pure math for a hand-built mixed
@@ -148,24 +167,36 @@ describe('v1.1 CodeLens', () => {
     await vscode.window.showTextDocument(doc)
 
     const lenses = await vscode.commands.executeCommand<vscode.CodeLens[]>(
-      'vscode.executeCodeLensProvider', doc.uri)
-    const vouchLenses = (lenses ?? []).filter(l =>
-      typeof l.command?.title === 'string' &&
-      (l.command.title.includes('Reviewed') || l.command.title.includes('Dismissed')
-        || l.command.title === 'Re-review' || l.command.title === 'Diff'))
+      'vscode.executeCodeLensProvider',
+      doc.uri,
+    )
+    const vouchLenses = (lenses ?? []).filter(
+      (l) =>
+        typeof l.command?.title === 'string' &&
+        (l.command.title.includes('Reviewed') ||
+          l.command.title.includes('Dismissed') ||
+          l.command.title === 'Re-review' ||
+          l.command.title === 'Diff'),
+    )
     assert.ok(vouchLenses.length >= 1, 'at least one vouch codelens')
 
-    await vscode.workspace.getConfiguration('vouch').update(
-      'codeLens.enabled', false, vscode.ConfigurationTarget.Global)
+    await vscode.workspace
+      .getConfiguration('vouch')
+      .update('codeLens.enabled', false, vscode.ConfigurationTarget.Global)
     // Give the provider a tick to observe the config change.
-    await new Promise(r => setTimeout(r, 200))
+    await new Promise((r) => setTimeout(r, 200))
     const lenses2 = await vscode.commands.executeCommand<vscode.CodeLens[]>(
-      'vscode.executeCodeLensProvider', doc.uri)
-    const vouch2 = (lenses2 ?? []).filter(l =>
-      typeof l.command?.title === 'string' &&
-      (l.command.title.includes('Reviewed') || l.command.title.includes('Dismissed')))
+      'vscode.executeCodeLensProvider',
+      doc.uri,
+    )
+    const vouch2 = (lenses2 ?? []).filter(
+      (l) =>
+        typeof l.command?.title === 'string' &&
+        (l.command.title.includes('Reviewed') || l.command.title.includes('Dismissed')),
+    )
     assert.strictEqual(vouch2.length, 0, 'no vouch codelens when disabled')
-    await vscode.workspace.getConfiguration('vouch').update(
-      'codeLens.enabled', true, vscode.ConfigurationTarget.Global)
+    await vscode.workspace
+      .getConfiguration('vouch')
+      .update('codeLens.enabled', true, vscode.ConfigurationTarget.Global)
   })
 })

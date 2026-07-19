@@ -24,7 +24,8 @@ export class VouchBaselineProvider implements vscode.TextDocumentContentProvider
     if (!warned.has(uri.path)) {
       warned.add(uri.path)
       void vscode.window.showWarningMessage(
-        'Vouch: this diff baseline is no longer cached - reopen the diff from the hover or CodeLens.')
+        'Vouch: this diff baseline is no longer cached - reopen the diff from the hover or CodeLens.',
+      )
     }
     return ''
   }
@@ -50,13 +51,14 @@ function register(text: string, label: string): vscode.Uri {
 }
 
 export function findRecord(
-  ctx: VouchContext, recordId: string,
+  ctx: VouchContext,
+  recordId: string,
 ): { record: ReviewRecord; rootDir: string; sourcePath: string } | null {
   for (const root of ctx.roots) {
     for (const sourcePath of root.store.attestedFiles()) {
       const state = root.store.stateFor(sourcePath)!
       for (const members of state.chains.values()) {
-        const record = members.find(m => m.id === recordId)
+        const record = members.find((m) => m.id === recordId)
         if (record) return { record, rootDir: root.rootDir, sourcePath }
       }
     }
@@ -65,18 +67,27 @@ export function findRecord(
 }
 
 export async function showDiff(
-  ctx: VouchContext, pipeline: StatusPipeline, recordId: string,
+  ctx: VouchContext,
+  pipeline: StatusPipeline,
+  recordId: string,
 ): Promise<void> {
   const found = findRecord(ctx, recordId)
-  if (!found) { void vscode.window.showWarningMessage('Vouch: record not found.'); return }
+  if (!found) {
+    void vscode.window.showWarningMessage('Vouch: record not found.')
+    return
+  }
   const { record, rootDir, sourcePath } = found
   if (!record.commit || !isValidSha(record.commit)) {
-    void vscode.window.showWarningMessage('Vouch: review has no commit (not a git repo at review time).')
+    void vscode.window.showWarningMessage(
+      'Vouch: review has no commit (not a git repo at review time).',
+    )
     return
   }
   const committed = await showAtCommit(rootDir, record.commit, sourcePath)
   if (committed === null) {
-    void vscode.window.showWarningMessage(`Vouch: commit ${record.commit.slice(0, 7)} not available locally.`)
+    void vscode.window.showWarningMessage(
+      `Vouch: commit ${record.commit.slice(0, 7)} not available locally.`,
+    )
     return
   }
   const sha7 = record.commit.slice(0, 7)
@@ -86,22 +97,32 @@ export async function showDiff(
   if (base.verified && record.kind !== 'file') {
     const doc = await vscode.workspace.openTextDocument(fileUri)
     const status = await pipeline.statusFor(doc)
-    const entry = status.entries.find(e => e.record.id === recordId)
+    const entry = status.entries.find((e) => e.record.id === recordId)
     // Historical (superseded) records never appear in the pipeline's current
     // entries, so resolve them against the live text instead of trusting the
     // stored line numbers - the reviewed text may have moved intact.
     const range = entry?.res.effectiveRange ?? resolveRecord(record, doc.getText()).effectiveRange
-    const currentSlice = splitLines(doc.getText()).slice(range[0] - 1, range[1]).join('\n')
-    await vscode.commands.executeCommand('vscode.diff',
-      register(base.text, `baseline-${sha7}`), register(currentSlice, 'current'),
-      `Vouch: since ${sha7}`)
+    const currentSlice = splitLines(doc.getText())
+      .slice(range[0] - 1, range[1])
+      .join('\n')
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      register(base.text, `baseline-${sha7}`),
+      register(currentSlice, 'current'),
+      `Vouch: since ${sha7}`,
+    )
     return
   }
 
   if (!base.verified) {
     void vscode.window.showWarningMessage(
-      `Vouch: reviewed text was not in commit ${sha7} — showing nearest baseline.`)
+      `Vouch: reviewed text was not in commit ${sha7} — showing nearest baseline.`,
+    )
   }
-  await vscode.commands.executeCommand('vscode.diff',
-    register(committed, `baseline-${sha7}`), fileUri, `Vouch: since ${sha7} (whole file)`)
+  await vscode.commands.executeCommand(
+    'vscode.diff',
+    register(committed, `baseline-${sha7}`),
+    fileUri,
+    `Vouch: since ${sha7} (whole file)`,
+  )
 }

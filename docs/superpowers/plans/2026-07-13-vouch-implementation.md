@@ -75,9 +75,11 @@ Dependency direction: `vscode/*` → `core/*`, never the reverse. `core/*` may u
 ### Task 1: Scaffold, manifest, build + test infrastructure
 
 **Files:**
+
 - Create: `package.json`, `tsconfig.json`, `esbuild.mjs`, `vitest.config.ts`, `.gitignore`, `.vscodeignore`, `src/vscode/extension.ts` (stub), `media/reviewed.svg`, `media/dismissed.svg`, `test/core/smoke.test.ts`
 
 **Interfaces:**
+
 - Produces: `npm run build` (esbuild bundle), `npm test` (vitest), `npm run test:int` (added Task 10), command/view ids used by all later tasks: `vouch.init|selection|function|class|file|reReview|unvouch|showDiff|openCommitOnWeb|reattach`, view container `vouch`, view `vouch.coverage`.
 
 - [ ] **Step 1: Write package.json (full manifest)**
@@ -106,12 +108,10 @@ Dependency direction: `vscode/*` → `core/*`, never the reverse. `core/*` may u
       { "command": "vouch.unvouch", "title": "Vouch: Revoke my review" },
       { "command": "vouch.showDiff", "title": "Vouch: Diff since my review" },
       { "command": "vouch.openCommitOnWeb", "title": "Vouch: Open review commit on web" },
-      { "command": "vouch.reattach", "title": "Vouch: Re-attach orphaned reviews" }
+      { "command": "vouch.reattach", "title": "Vouch: Re-attach orphaned reviews" },
     ],
     "menus": {
-      "editor/context": [
-        { "submenu": "vouch.menu", "group": "1_modification@9" }
-      ],
+      "editor/context": [{ "submenu": "vouch.menu", "group": "1_modification@9" }],
       "vouch.menu": [
         { "command": "vouch.selection", "group": "a@1" },
         { "command": "vouch.function", "group": "a@2" },
@@ -119,16 +119,16 @@ Dependency direction: `vscode/*` → `core/*`, never the reverse. `core/*` may u
         { "command": "vouch.file", "group": "a@4" },
         { "command": "vouch.reReview", "group": "b@1" },
         { "command": "vouch.unvouch", "group": "b@2" },
-        { "command": "vouch.showDiff", "group": "c@1" }
-      ]
+        { "command": "vouch.showDiff", "group": "c@1" },
+      ],
     },
-    "submenus": [ { "id": "vouch.menu", "label": "Vouch" } ],
+    "submenus": [{ "id": "vouch.menu", "label": "Vouch" }],
     "viewsContainers": {
-      "activitybar": [ { "id": "vouch", "title": "Vouch", "icon": "media/reviewed.svg" } ]
+      "activitybar": [{ "id": "vouch", "title": "Vouch", "icon": "media/reviewed.svg" }],
     },
     "views": {
-      "vouch": [ { "id": "vouch.coverage", "name": "Review Coverage" } ]
-    }
+      "vouch": [{ "id": "vouch.coverage", "name": "Review Coverage" }],
+    },
   },
   "scripts": {
     "build": "node esbuild.mjs",
@@ -136,7 +136,7 @@ Dependency direction: `vscode/*` → `core/*`, never the reverse. `core/*` may u
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:int": "npm run build && tsc -p tsconfig.int.json && node out-int/test/vscode-int/runTest.js",
-    "package": "npm run build && vsce package --no-dependencies"
+    "package": "npm run build && vsce package --no-dependencies",
   },
   "devDependencies": {
     "@types/mocha": "^10.0.6",
@@ -148,8 +148,8 @@ Dependency direction: `vscode/*` → `core/*`, never the reverse. `core/*` may u
     "glob": "^10.3.0",
     "mocha": "^10.3.0",
     "typescript": "^5.4.0",
-    "vitest": "^1.4.0"
-  }
+    "vitest": "^1.4.0",
+  },
 }
 ```
 
@@ -168,10 +168,10 @@ Dependency direction: `vscode/*` → `core/*`, never the reverse. `core/*` may u
     "esModuleInterop": true,
     "skipLibCheck": true,
     "outDir": "out",
-    "rootDir": "."
+    "rootDir": ".",
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],
-  "exclude": ["node_modules", "dist", "out", "out-int"]
+  "exclude": ["node_modules", "dist", "out", "out-int"],
 }
 ```
 
@@ -191,7 +191,10 @@ const ctx = await esbuild.context({
   sourcemap: true,
 })
 if (watch) await ctx.watch()
-else { await ctx.rebuild(); await ctx.dispose() }
+else {
+  await ctx.rebuild()
+  await ctx.dispose()
+}
 ```
 
 ```ts
@@ -252,7 +255,9 @@ export function deactivate(): void {}
 import { describe, it, expect } from 'vitest'
 
 describe('toolchain', () => {
-  it('runs', () => { expect(1 + 1).toBe(2) })
+  it('runs', () => {
+    expect(1 + 1).toBe(2)
+  })
 })
 ```
 
@@ -273,43 +278,48 @@ git commit -m "chore: scaffold extension manifest, esbuild, vitest"
 ### Task 2: Core types + text/hash utilities
 
 **Files:**
+
 - Create: `src/core/types.ts`, `src/core/text.ts`
 - Test: `test/core/text.test.ts`
 
 **Interfaces:**
+
 - Produces: `ReviewRecord`, `Tombstone`, `Author`, `VouchLine`, `RecordKind` (types.ts); `normalizeEol(s)`, `splitLines(s): string[]`, `countLines(s): number`, `sha256(s): string` (returns `sha256:<hex>`), `hashLines(lines: string[]): string` (= `sha256(lines.join('\n'))`). Every later task hashes ONLY through these.
 
 - [ ] **Step 1: Write types**
 
 ```ts
 // src/core/types.ts
-export interface Author { name: string; email: string }
+export interface Author {
+  name: string
+  email: string
+}
 
 export type RecordKind = 'selection' | 'function' | 'class' | 'file'
 
 export interface ReviewRecord {
   id: string
   author: Author
-  createdAt: string            // ISO 8601
-  commit: string               // '' when not a git repo
-  dirty: boolean               // file differed from HEAD at review time
+  createdAt: string // ISO 8601
+  commit: string // '' when not a git repo
+  dirty: boolean // file differed from HEAD at review time
   kind: RecordKind
-  symbol?: string              // hierarchical DocumentSymbol names joined with '/'
-  range?: [number, number]     // 1-based inclusive; absent for kind='file'
-  hash: string                 // sha256:<hex> of range text (or whole file), CRLF-normalized
-  headHash?: string            // sha256:<hex> of the range's first line; absent for kind='file'
+  symbol?: string // hierarchical DocumentSymbol names joined with '/'
+  range?: [number, number] // 1-based inclusive; absent for kind='file'
+  hash: string // sha256:<hex> of range text (or whole file), CRLF-normalized
+  headHash?: string // sha256:<hex> of the range's first line; absent for kind='file'
   comment?: string
-  supersedes?: string[]        // same-user record ids this replaces
-  movedFrom?: string           // set by re-attach
+  supersedes?: string[] // same-user record ids this replaces
+  movedFrom?: string // set by re-attach
 }
 
 export interface Tombstone {
   id: string
   author: Author
   createdAt: string
-  revokes: string              // any record id in the target chain — kills the whole chain
+  revokes: string // any record id in the target chain — kills the whole chain
   reason: 'unvouch' | 'moved'
-  movedTo?: string             // repo-relative path, reason='moved'
+  movedTo?: string // repo-relative path, reason='moved'
 }
 
 export type VouchLine = ReviewRecord | Tombstone
@@ -409,10 +419,12 @@ git commit -m "feat: core types and CRLF-normalized text/hash utilities"
 ### Task 3: JSONL codec + chain resolution
 
 **Files:**
+
 - Create: `src/core/records.ts`
 - Test: `test/core/records.test.ts`
 
 **Interfaces:**
+
 - Consumes: types from Task 2.
 - Produces:
   - `isTombstone(l: VouchLine): l is Tombstone`
@@ -430,8 +442,18 @@ import type { ReviewRecord, Tombstone } from '../../src/core/types'
 
 const AUTHOR = { name: 'San', email: 's@x.com' }
 function rec(id: string, createdAt: string, extra: Partial<ReviewRecord> = {}): ReviewRecord {
-  return { id, author: AUTHOR, createdAt, commit: 'c1', dirty: false, kind: 'selection',
-    range: [1, 3], hash: 'sha256:aa', headHash: 'sha256:bb', ...extra }
+  return {
+    id,
+    author: AUTHOR,
+    createdAt,
+    commit: 'c1',
+    dirty: false,
+    kind: 'selection',
+    range: [1, 3],
+    hash: 'sha256:aa',
+    headHash: 'sha256:bb',
+    ...extra,
+  }
 }
 function tomb(id: string, revokes: string): Tombstone {
   return { id, author: AUTHOR, createdAt: '2026-07-13T10:00:00Z', revokes, reason: 'unvouch' }
@@ -439,8 +461,12 @@ function tomb(id: string, revokes: string): Tombstone {
 
 describe('parseJsonl', () => {
   it('parses records, skips corrupt lines and blanks, counts corruption', () => {
-    const content = JSON.stringify(rec('a', '2026-01-01T00:00:00Z')) + '\n' +
-      'NOT JSON\n' + '\n' + '{"noId": true}\n'
+    const content =
+      JSON.stringify(rec('a', '2026-01-01T00:00:00Z')) +
+      '\n' +
+      'NOT JSON\n' +
+      '\n' +
+      '{"noId": true}\n'
     const { lines, corrupt } = parseJsonl(content)
     expect(lines).toHaveLength(1)
     expect(lines[0]!.id).toBe('a')
@@ -452,14 +478,14 @@ describe('dedupeById', () => {
   it('keeps first occurrence (union-merge duplicates)', () => {
     const a1 = rec('a', '2026-01-01T00:00:00Z')
     const out = dedupeById([a1, rec('a', '2026-01-02T00:00:00Z'), rec('b', '2026-01-01T00:00:00Z')])
-    expect(out.map(l => l.id)).toEqual(['a', 'b'])
+    expect(out.map((l) => l.id)).toEqual(['a', 'b'])
   })
 })
 
 describe('resolveChains', () => {
   it('single record is its own chain and current', () => {
     const s = resolveChains([rec('a', '2026-01-01T00:00:00Z')])
-    expect(s.current.map(r => r.id)).toEqual(['a'])
+    expect(s.current.map((r) => r.id)).toEqual(['a'])
     expect(s.chains.size).toBe(1)
   })
 
@@ -468,10 +494,10 @@ describe('resolveChains', () => {
       rec('a', '2026-01-01T00:00:00Z'),
       rec('b', '2026-01-02T00:00:00Z', { supersedes: ['a'] }),
     ])
-    expect(s.current.map(r => r.id)).toEqual(['b'])
+    expect(s.current.map((r) => r.id)).toEqual(['b'])
     expect(s.chains.size).toBe(1)
     const chain = [...s.chains.values()][0]!
-    expect(chain.map(r => r.id)).toEqual(['a', 'b'])
+    expect(chain.map((r) => r.id)).toEqual(['a', 'b'])
   })
 
   it('fork (two records superseding same parent) resolves by createdAt, tie by id', () => {
@@ -480,7 +506,7 @@ describe('resolveChains', () => {
       rec('b', '2026-01-02T00:00:00Z', { supersedes: ['a'] }),
       rec('c', '2026-01-02T00:00:00Z', { supersedes: ['a'] }), // same timestamp fork
     ])
-    expect(s.current.map(r => r.id)).toEqual(['c']) // 'c' > 'b'
+    expect(s.current.map((r) => r.id)).toEqual(['c']) // 'c' > 'b'
   })
 
   it('revoking ANY record kills the whole chain — no resurrection', () => {
@@ -504,7 +530,7 @@ describe('resolveChains', () => {
 
   it('supersedes referencing a missing id still forms a chain', () => {
     const s = resolveChains([rec('b', '2026-01-02T00:00:00Z', { supersedes: ['ghost'] })])
-    expect(s.current.map(r => r.id)).toEqual(['b'])
+    expect(s.current.map((r) => r.id)).toEqual(['b'])
   })
 
   it('independent chains stay independent', () => {
@@ -614,7 +640,8 @@ export function resolveChains(all: VouchLine[]): ChainState {
   const current: ReviewRecord[] = []
   for (const [root, members] of chains) {
     members.sort((a, b) =>
-      a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1)
+      a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1,
+    )
     for (const m of members) chainOf.set(m.id, root)
     if (!revokedChains.has(root)) current.push(members[members.length - 1]!)
   }
@@ -640,10 +667,12 @@ git commit -m "feat: JSONL codec, dedupe, supersedes-chain resolution with chain
 ### Task 4: Shard paths + append-only writer + init
 
 **Files:**
+
 - Create: `src/core/paths.ts`, `src/core/writer.ts`
 - Test: `test/core/paths.test.ts`, `test/core/writer.test.ts`
 
 **Interfaces:**
+
 - Consumes: `VouchLine`, `Author` (Task 2).
 - Produces:
   - `authorSlug(email: string): string` — first 8 hex of sha256 of trimmed, lowercased email.
@@ -696,13 +725,23 @@ import { parseJsonl } from '../../src/core/records'
 import type { ReviewRecord } from '../../src/core/types'
 
 let dir: string
-beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'vouch-')) })
-afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+beforeEach(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'vouch-'))
+})
+afterEach(async () => {
+  await rm(dir, { recursive: true, force: true })
+})
 
 const REC: ReviewRecord = {
-  id: 'r1', author: { name: 'S', email: 's@x.com' }, createdAt: '2026-01-01T00:00:00Z',
-  commit: 'c', dirty: false, kind: 'selection', range: [1, 2],
-  hash: 'sha256:aa', headHash: 'sha256:bb',
+  id: 'r1',
+  author: { name: 'S', email: 's@x.com' },
+  createdAt: '2026-01-01T00:00:00Z',
+  commit: 'c',
+  dirty: false,
+  kind: 'selection',
+  range: [1, 2],
+  hash: 'sha256:aa',
+  headHash: 'sha256:bb',
 }
 
 describe('appendLine', () => {
@@ -711,7 +750,7 @@ describe('appendLine', () => {
     await appendLine(dir, 'src/a.ts', 'a1b2c3d4', { ...REC, id: 'r2' })
     const content = await readFile(join(dir, '.vouch/reviews/src/a.ts/a1b2c3d4.jsonl'), 'utf8')
     const { lines, corrupt } = parseJsonl(content)
-    expect(lines.map(l => l.id)).toEqual(['r1', 'r2'])
+    expect(lines.map((l) => l.id)).toEqual(['r1', 'r2'])
     expect(corrupt).toBe(0)
     expect(content.endsWith('\n')).toBe(true)
   })
@@ -724,7 +763,7 @@ describe('initVouch', () => {
     const cfg = JSON.parse(await readFile(join(dir, '.vouch/config.json'), 'utf8'))
     expect(cfg.schemaVersion).toBe(1)
     const attrs = await readFile(join(dir, '.gitattributes'), 'utf8')
-    expect(attrs.split('\n').filter(l => l === '.vouch/reviews/** merge=union')).toHaveLength(1)
+    expect(attrs.split('\n').filter((l) => l === '.vouch/reviews/** merge=union')).toHaveLength(1)
   })
   it('preserves an existing .gitattributes', async () => {
     const { writeFile } = await import('node:fs/promises')
@@ -770,7 +809,10 @@ import { shardPath } from './paths'
 import type { VouchLine } from './types'
 
 export async function appendLine(
-  rootDir: string, sourcePath: string, slug: string, line: VouchLine,
+  rootDir: string,
+  sourcePath: string,
+  slug: string,
+  line: VouchLine,
 ): Promise<void> {
   const abs = join(rootDir, shardPath(sourcePath, slug))
   await mkdir(dirname(abs), { recursive: true })
@@ -789,7 +831,11 @@ export async function initVouch(rootDir: string): Promise<void> {
   }
   const attrPath = join(rootDir, '.gitattributes')
   let attrs = ''
-  try { attrs = await readFile(attrPath, 'utf8') } catch { /* absent */ }
+  try {
+    attrs = await readFile(attrPath, 'utf8')
+  } catch {
+    /* absent */
+  }
   if (!attrs.split('\n').includes(ATTR_LINE)) {
     const sep = attrs === '' || attrs.endsWith('\n') ? '' : '\n'
     await writeFile(attrPath, attrs + sep + ATTR_LINE + '\n', 'utf8')
@@ -814,10 +860,12 @@ git commit -m "feat: per-author shard paths, append-only writer, vouch init"
 ### Task 5: ReviewStore
 
 **Files:**
+
 - Create: `src/core/store.ts`
 - Test: `test/core/store.test.ts`
 
 **Interfaces:**
+
 - Consumes: Tasks 3–4.
 - Produces class `ReviewStore`:
   - `constructor(rootDir: string)`
@@ -841,19 +889,33 @@ import { shardPath, authorSlug } from '../../src/core/paths'
 import type { ReviewRecord, Tombstone } from '../../src/core/types'
 
 let dir: string
-beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'vouch-')) })
-afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+beforeEach(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'vouch-'))
+})
+afterEach(async () => {
+  await rm(dir, { recursive: true, force: true })
+})
 
 const SAN = { name: 'San', email: 's@x.com' }
 const BOB = { name: 'Bob', email: 'b@x.com' }
 function rec(id: string, author = SAN, extra: Partial<ReviewRecord> = {}): ReviewRecord {
-  return { id, author, createdAt: '2026-01-01T00:00:00Z', commit: 'c', dirty: false,
-    kind: 'selection', range: [1, 2], hash: 'sha256:aa', headHash: 'sha256:bb', ...extra }
+  return {
+    id,
+    author,
+    createdAt: '2026-01-01T00:00:00Z',
+    commit: 'c',
+    dirty: false,
+    kind: 'selection',
+    range: [1, 2],
+    hash: 'sha256:aa',
+    headHash: 'sha256:bb',
+    ...extra,
+  }
 }
 async function writeShard(sourcePath: string, email: string, lines: object[]): Promise<void> {
   const p = join(dir, shardPath(sourcePath, authorSlug(email)))
   await mkdir(dirname(p), { recursive: true })
-  await writeFile(p, lines.map(l => JSON.stringify(l)).join('\n') + '\n', 'utf8')
+  await writeFile(p, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8')
 }
 
 describe('ReviewStore', () => {
@@ -874,8 +936,13 @@ describe('ReviewStore', () => {
   })
 
   it('cross-shard dedupe by id and revocation apply', async () => {
-    const t: Tombstone = { id: 't1', author: SAN, createdAt: '2026-01-02T00:00:00Z',
-      revokes: 'r1', reason: 'unvouch' }
+    const t: Tombstone = {
+      id: 't1',
+      author: SAN,
+      createdAt: '2026-01-02T00:00:00Z',
+      revokes: 'r1',
+      reason: 'unvouch',
+    }
     await writeShard('src/a.ts', SAN.email, [rec('r1'), rec('r1'), t])
     const s = new ReviewStore(dir)
     await s.load()
@@ -898,7 +965,7 @@ describe('ReviewStore', () => {
     await writeShard('src/here.ts', SAN.email, [rec('r2')])
     const s = new ReviewStore(dir)
     await s.load()
-    expect(s.orphans(p => p === 'src/here.ts')).toEqual(['src/gone.ts'])
+    expect(s.orphans((p) => p === 'src/here.ts')).toEqual(['src/gone.ts'])
   })
 })
 ```
@@ -956,7 +1023,7 @@ export class ReviewStore {
   }
 
   orphans(exists: (sourcePath: string) => boolean): string[] {
-    return this.attestedFiles().filter(p => !exists(p))
+    return this.attestedFiles().filter((p) => !exists(p))
   }
 
   counts(): { records: number; perAuthor: Map<string, { name: string; current: number }> } {
@@ -976,11 +1043,15 @@ export class ReviewStore {
 
 async function walk(dir: string): Promise<string[]> {
   let entries
-  try { entries = await readdir(dir, { withFileTypes: true }) } catch { return [] }
+  try {
+    entries = await readdir(dir, { withFileTypes: true })
+  } catch {
+    return []
+  }
   const out: string[] = []
   for (const e of entries) {
     const p = join(dir, e.name)
-    if (e.isDirectory()) out.push(...await walk(p))
+    if (e.isDirectory()) out.push(...(await walk(p)))
     else if (e.isFile() && e.name.endsWith('.jsonl')) out.push(p)
   }
   return out
@@ -1004,10 +1075,12 @@ git commit -m "feat: ReviewStore loads per-author shards into per-source chain s
 ### Task 6: Git info + web commit URLs
 
 **Files:**
+
 - Create: `src/core/giturl.ts`, `src/vscode/gitinfo.ts`
 - Test: `test/core/giturl.test.ts`, `test/core/gitinfo.test.ts` (uses real `git` in a temp repo — `gitinfo.ts` has no `vscode` imports, so vitest can run it)
 
 **Interfaces:**
+
 - Consumes: `Author` (Task 2).
 - Produces:
   - `commitUrl(remote: string, sha: string): string | null` (giturl.ts) — parses `git@host:org/repo.git` and `https://host/org/repo[.git]`; github → `https://<host>/<org>/<repo>/commit/<sha>`, gitlab (host contains "gitlab") → `/-/commit/<sha>`, bitbucket.org → `/commits/<sha>`, unknown hosts → github pattern (best effort).
@@ -1030,20 +1103,24 @@ import { commitUrl } from '../../src/core/giturl'
 
 describe('commitUrl', () => {
   it('github https', () => {
-    expect(commitUrl('https://github.com/org/repo.git', 'abc'))
-      .toBe('https://github.com/org/repo/commit/abc')
+    expect(commitUrl('https://github.com/org/repo.git', 'abc')).toBe(
+      'https://github.com/org/repo/commit/abc',
+    )
   })
   it('github ssh', () => {
-    expect(commitUrl('git@github.com:org/repo.git', 'abc'))
-      .toBe('https://github.com/org/repo/commit/abc')
+    expect(commitUrl('git@github.com:org/repo.git', 'abc')).toBe(
+      'https://github.com/org/repo/commit/abc',
+    )
   })
   it('gitlab (self-hosted host containing gitlab)', () => {
-    expect(commitUrl('git@gitlab.mycorp.io:team/app.git', 'abc'))
-      .toBe('https://gitlab.mycorp.io/team/app/-/commit/abc')
+    expect(commitUrl('git@gitlab.mycorp.io:team/app.git', 'abc')).toBe(
+      'https://gitlab.mycorp.io/team/app/-/commit/abc',
+    )
   })
   it('bitbucket', () => {
-    expect(commitUrl('https://bitbucket.org/org/repo.git', 'abc'))
-      .toBe('https://bitbucket.org/org/repo/commits/abc')
+    expect(commitUrl('https://bitbucket.org/org/repo.git', 'abc')).toBe(
+      'https://bitbucket.org/org/repo/commits/abc',
+    )
   })
   it('garbage remote → null', () => {
     expect(commitUrl('not a url', 'abc')).toBeNull()
@@ -1061,7 +1138,9 @@ import { execFileSync } from 'node:child_process'
 import { repoRoot, identity, headSha, isDirty, showAtCommit } from '../../src/vscode/gitinfo'
 
 let dir: string
-function sh(args: string[]): void { execFileSync('git', args, { cwd: dir }) }
+function sh(args: string[]): void {
+  execFileSync('git', args, { cwd: dir })
+}
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'vouch-git-'))
@@ -1070,9 +1149,12 @@ beforeEach(async () => {
   sh(['config', 'user.email', 't@x.com'])
   await mkdir(join(dir, 'src'), { recursive: true })
   await writeFile(join(dir, 'src/a.ts'), 'one\ntwo\n')
-  sh(['add', '-A']); sh(['commit', '-q', '-m', 'init'])
+  sh(['add', '-A'])
+  sh(['commit', '-q', '-m', 'init'])
 })
-afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+afterEach(async () => {
+  await rm(dir, { recursive: true, force: true })
+})
 
 describe('gitinfo', () => {
   it('repoRoot finds the root from a subdirectory', async () => {
@@ -1096,8 +1178,11 @@ describe('gitinfo', () => {
   })
   it('null outside a repo', async () => {
     const outside = await mkdtemp(join(tmpdir(), 'vouch-norepo-'))
-    try { expect(await repoRoot(outside)).toBeNull() }
-    finally { await rm(outside, { recursive: true, force: true }) }
+    try {
+      expect(await repoRoot(outside)).toBeNull()
+    } finally {
+      await rm(outside, { recursive: true, force: true })
+    }
   })
 })
 ```
@@ -1137,7 +1222,7 @@ import { execFile } from 'node:child_process'
 import type { Author } from '../core/types'
 
 export function git(args: string[], cwd: string): Promise<string | null> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     execFile('git', args, { cwd, maxBuffer: 64 * 1024 * 1024 }, (err, stdout) => {
       resolve(err ? null : stdout.replace(/\n$/, ''))
     })
@@ -1164,7 +1249,9 @@ export async function isDirty(root: string, sourcePath: string): Promise<boolean
 }
 
 export async function showAtCommit(
-  root: string, commit: string, sourcePath: string,
+  root: string,
+  commit: string,
+  sourcePath: string,
 ): Promise<string | null> {
   return git(['show', `${commit}:${sourcePath}`], root)
 }
@@ -1183,7 +1270,7 @@ Note: `git show` trims nothing — but `git()` strips ONE trailing `\n` which `g
 
 ```ts
 export function git(args: string[], cwd: string, opts?: { raw?: boolean }): Promise<string | null> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     execFile('git', args, { cwd, maxBuffer: 64 * 1024 * 1024 }, (err, stdout) => {
       resolve(err ? null : opts?.raw ? stdout : stdout.replace(/\n$/, ''))
     })
@@ -1209,10 +1296,12 @@ git commit -m "feat: git child_process helpers and commit web URL builder"
 ### Task 7: Symbol tree helpers
 
 **Files:**
+
 - Create: `src/core/anchor.ts` (symbol section)
 - Test: `test/core/symbols.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing new.
 - Produces (in `src/core/anchor.ts`):
   - `interface SymbolNode { name: string; kindClass: 'function' | 'class' | 'other'; range: [number, number]; children: SymbolNode[] }` — structural, built by `src/vscode/symbols.ts` (Task 10) from `DocumentSymbol[]`; `range` is 1-based inclusive full range.
@@ -1228,7 +1317,9 @@ import { enclosingSymbol, resolveSymbolPath, type SymbolNode } from '../../src/c
 
 const TREE: SymbolNode[] = [
   {
-    name: 'AuthService', kindClass: 'class', range: [10, 100],
+    name: 'AuthService',
+    kindClass: 'class',
+    range: [10, 100],
     children: [
       { name: 'login', kindClass: 'function', range: [20, 40], children: [] },
       { name: 'logout', kindClass: 'function', range: [50, 60], children: [] },
@@ -1239,19 +1330,19 @@ const TREE: SymbolNode[] = [
 
 describe('enclosingSymbol', () => {
   it('finds deepest function containing line', () => {
-    expect(enclosingSymbol(TREE, 25, 'function'))
-      .toEqual({ path: 'AuthService/login', range: [20, 40] })
+    expect(enclosingSymbol(TREE, 25, 'function')).toEqual({
+      path: 'AuthService/login',
+      range: [20, 40],
+    })
   })
   it('finds class when asked for class', () => {
-    expect(enclosingSymbol(TREE, 25, 'class'))
-      .toEqual({ path: 'AuthService', range: [10, 100] })
+    expect(enclosingSymbol(TREE, 25, 'class')).toEqual({ path: 'AuthService', range: [10, 100] })
   })
   it('line inside class but outside methods → no function', () => {
     expect(enclosingSymbol(TREE, 45, 'function')).toBeNull()
   })
   it('top-level function', () => {
-    expect(enclosingSymbol(TREE, 115, 'function'))
-      .toEqual({ path: 'helper', range: [110, 120] })
+    expect(enclosingSymbol(TREE, 115, 'function')).toEqual({ path: 'helper', range: [110, 120] })
   })
   it('no symbol at line', () => {
     expect(enclosingSymbol(TREE, 105, 'function')).toBeNull()
@@ -1289,7 +1380,9 @@ export interface SymbolNode {
 }
 
 export function enclosingSymbol(
-  roots: SymbolNode[], line: number, want: 'function' | 'class',
+  roots: SymbolNode[],
+  line: number,
+  want: 'function' | 'class',
 ): { path: string; range: [number, number] } | null {
   let best: { path: string; range: [number, number]; depth: number } | null = null
   const visit = (nodes: SymbolNode[], prefix: string[], depth: number): void => {
@@ -1311,7 +1404,7 @@ export function resolveSymbolPath(roots: SymbolNode[], path: string): SymbolNode
   let level = roots
   let node: SymbolNode | null = null
   for (const seg of segments) {
-    node = level.find(n => n.name === seg) ?? null
+    node = level.find((n) => n.name === seg) ?? null
     if (!node) return null
     level = node.children
   }
@@ -1336,10 +1429,12 @@ git commit -m "feat: symbol tree path build/resolve helpers"
 ### Task 8: Anchor engine — resolveRecord (two-stage scan)
 
 **Files:**
+
 - Modify: `src/core/anchor.ts` (append resolution section)
 - Test: `test/core/anchor.test.ts`
 
 **Interfaces:**
+
 - Consumes: `splitLines`, `hashLines`, `sha256`, `normalizeEol` (Task 2); `ReviewRecord` (Task 2).
 - Produces:
   - `type Status = 'reviewed' | 'dismissed'`
@@ -1357,12 +1452,28 @@ import { resolveRecord, hashRangeOfText, HUGE_FILE_LINES } from '../../src/core/
 import { splitLines } from '../../src/core/text'
 import type { ReviewRecord } from '../../src/core/types'
 
-const DOC = ['function a() {', '  return 1', '}', '', 'function b() {', '  return 2', '}'].join('\n')
+const DOC = ['function a() {', '  return 1', '}', '', 'function b() {', '  return 2', '}'].join(
+  '\n',
+)
 
-function recFor(docText: string, range: [number, number], extra: Partial<ReviewRecord> = {}): ReviewRecord {
+function recFor(
+  docText: string,
+  range: [number, number],
+  extra: Partial<ReviewRecord> = {},
+): ReviewRecord {
   const { hash, headHash } = hashRangeOfText(docText, range)
-  return { id: 'r1', author: { name: 'S', email: 's@x.com' }, createdAt: '2026-01-01T00:00:00Z',
-    commit: 'c', dirty: false, kind: 'selection', range, hash, headHash, ...extra }
+  return {
+    id: 'r1',
+    author: { name: 'S', email: 's@x.com' },
+    createdAt: '2026-01-01T00:00:00Z',
+    commit: 'c',
+    dirty: false,
+    kind: 'selection',
+    range,
+    hash,
+    headHash,
+    ...extra,
+  }
 }
 
 describe('resolveRecord — text scan', () => {
@@ -1424,8 +1535,15 @@ describe('resolveRecord — symbolRange step', () => {
 describe('resolveRecord — kind=file', () => {
   it('whole-file match / mismatch', () => {
     const { hash } = hashRangeOfText(DOC, [1, splitLines(DOC).length])
-    const r: ReviewRecord = { id: 'f', author: { name: 'S', email: 's@x.com' },
-      createdAt: '2026-01-01T00:00:00Z', commit: 'c', dirty: false, kind: 'file', hash }
+    const r: ReviewRecord = {
+      id: 'f',
+      author: { name: 'S', email: 's@x.com' },
+      createdAt: '2026-01-01T00:00:00Z',
+      commit: 'c',
+      dirty: false,
+      kind: 'file',
+      hash,
+    }
     expect(resolveRecord(r, DOC).status).toBe('reviewed')
     expect(resolveRecord(r, DOC + '\nx').status).toBe('dismissed')
   })
@@ -1436,9 +1554,9 @@ describe('resolveRecord — huge files', () => {
     const filler = Array.from({ length: HUGE_FILE_LINES + 5 }, (_, i) => `line ${i}`)
     const doc = filler.join('\n')
     const r = recFor(doc, [100, 102])
-    expect(resolveRecord(r, doc).status).toBe('reviewed')          // window at stored range
-    const moved = 'inserted\n' + doc                                // shifts everything by 1
-    expect(resolveRecord(r, moved).status).toBe('dismissed')       // no scan over cap
+    expect(resolveRecord(r, doc).status).toBe('reviewed') // window at stored range
+    const moved = 'inserted\n' + doc // shifts everything by 1
+    expect(resolveRecord(r, moved).status).toBe('dismissed') // no scan over cap
   })
 })
 ```
@@ -1448,7 +1566,7 @@ describe('resolveRecord — huge files', () => {
 Before running, compute the second block's true position: lines are `1:'function dup() {'`, `2:'  return 9'`, `3:'}'`, `4:''`, `5:'spacer'`, `6:'spacer'`, `7:'spacer'`, `8:''`, `9:'function dup() {'`, `10:'  return 9'`, `11:'}'`. Set the record range to `[9, 11]`:
 
 ```ts
-    const r = recFor(doc, [9, 11])
+const r = recFor(doc, [9, 11])
 ```
 
 - [ ] **Step 3: Run tests, verify failure**
@@ -1464,11 +1582,15 @@ import { hashLines, normalizeEol, sha256, splitLines } from './text'
 import type { ReviewRecord } from './types'
 
 export type Status = 'reviewed' | 'dismissed'
-export interface Resolution { status: Status; effectiveRange: [number, number] }
+export interface Resolution {
+  status: Status
+  effectiveRange: [number, number]
+}
 export const HUGE_FILE_LINES = 20_000
 
 export function hashRangeOfText(
-  docText: string, range: [number, number],
+  docText: string,
+  range: [number, number],
 ): { hash: string; headHash: string } {
   const lines = splitLines(docText)
   const slice = lines.slice(range[0] - 1, range[1])
@@ -1476,7 +1598,9 @@ export function hashRangeOfText(
 }
 
 export function resolveRecord(
-  rec: ReviewRecord, docText: string, symbolRange?: [number, number] | null,
+  rec: ReviewRecord,
+  docText: string,
+  symbolRange?: [number, number] | null,
 ): Resolution {
   const lines = splitLines(docText)
 
@@ -1489,7 +1613,8 @@ export function resolveRecord(
   const len = stored[1] - stored[0] + 1
 
   const windowMatches = (startIdx: number): boolean =>
-    startIdx >= 0 && startIdx + len <= lines.length &&
+    startIdx >= 0 &&
+    startIdx + len <= lines.length &&
     hashLines(lines.slice(startIdx, startIdx + len)) === rec.hash
 
   // Step 1 (spec §5): symbol range check
@@ -1514,7 +1639,8 @@ export function resolveRecord(
     let best: number | null = null
     for (const i of candidates) {
       if (!windowMatches(i)) continue
-      if (best === null || Math.abs(i - (stored[0] - 1)) < Math.abs(best - (stored[0] - 1))) best = i
+      if (best === null || Math.abs(i - (stored[0] - 1)) < Math.abs(best - (stored[0] - 1)))
+        best = i
     }
     if (best !== null) {
       return { status: 'reviewed', effectiveRange: [best + 1, best + len] }
@@ -1548,10 +1674,12 @@ git commit -m "feat: anchor engine — symbol check plus two-stage text scan rel
 ### Task 9: Coverage math
 
 **Files:**
+
 - Create: `src/core/coverage.ts`
 - Test: `test/core/coverage.test.ts`
 
 **Interfaces:**
+
 - Consumes: `countLines` (Task 2); `Resolution` (Task 8); `ReviewRecord` (Task 2).
 - Produces:
   - `interface FileCoverage { reviewedLines: number; totalLines: number }`
@@ -1569,8 +1697,11 @@ import type { ReviewRecord } from '../../src/core/types'
 import type { Resolution } from '../../src/core/anchor'
 
 const DOC = 'a\nb\nc\nd\ne\nf\ng\nh\ni\nj' // 10 lines
-function entry(range: [number, number], status: 'reviewed' | 'dismissed' = 'reviewed',
-  kind: 'selection' | 'file' = 'selection') {
+function entry(
+  range: [number, number],
+  status: 'reviewed' | 'dismissed' = 'reviewed',
+  kind: 'selection' | 'file' = 'selection',
+) {
   const record = { id: 'x', kind } as ReviewRecord
   const res: Resolution = { status, effectiveRange: range }
   return { record, res }
@@ -1600,7 +1731,11 @@ describe('fileCoverage', () => {
 
 describe('rollup / pct', () => {
   it('raw line sums, nulls skipped', () => {
-    const r = rollup([{ reviewedLines: 5, totalLines: 10 }, null, { reviewedLines: 0, totalLines: 30 }])!
+    const r = rollup([
+      { reviewedLines: 5, totalLines: 10 },
+      null,
+      { reviewedLines: 0, totalLines: 30 },
+    ])!
     expect(r).toEqual({ reviewedLines: 5, totalLines: 40 })
     expect(pct(r)).toBe(13)
   })
@@ -1623,14 +1758,18 @@ import { countLines } from './text'
 import type { Resolution } from './anchor'
 import type { ReviewRecord } from './types'
 
-export interface FileCoverage { reviewedLines: number; totalLines: number }
+export interface FileCoverage {
+  reviewedLines: number
+  totalLines: number
+}
 
 export function fileCoverage(
-  resolved: { record: ReviewRecord; res: Resolution }[], docText: string,
+  resolved: { record: ReviewRecord; res: Resolution }[],
+  docText: string,
 ): FileCoverage | null {
   const totalLines = countLines(docText)
   if (totalLines === 0) return null
-  if (resolved.some(e => e.record.kind === 'file' && e.res.status === 'reviewed')) {
+  if (resolved.some((e) => e.record.kind === 'file' && e.res.status === 'reviewed')) {
     return { reviewedLines: totalLines, totalLines }
   }
   const covered = new Set<number>()
@@ -1678,11 +1817,13 @@ git commit -m "feat: coverage math — attested-file union, null-safe rollups"
 ### Task 10: VS Code adapters — symbols, context, activation skeleton, integration harness
 
 **Files:**
+
 - Create: `src/vscode/symbols.ts`, `src/vscode/context.ts`
 - Modify: `src/vscode/extension.ts`
 - Create: `tsconfig.int.json`, `test/vscode-int/runTest.ts`, `test/vscode-int/suite/index.ts`, `test/vscode-int/suite/extension.test.ts`, `test/vscode-int/fixture/.gitkeep`
 
 **Interfaces:**
+
 - Consumes: `SymbolNode`, `ReviewStore`, gitinfo (Tasks 5–7).
 - Produces:
   - `documentSymbols(uri: vscode.Uri): Promise<SymbolNode[]>` (symbols.ts) — runs `vscode.executeDocumentSymbolProvider`; detects shape: if first element lacks a `children` property (flat `SymbolInformation`) → return `[]` (spec §5: flat shape untrusted). Maps `SymbolKind.Function|Method|Constructor → 'function'`, `SymbolKind.Class|Interface|Struct|Enum → 'class'`, else `'other'`. Converts 0-based `symbol.range` to 1-based inclusive `[start.line+1, end.line+1]`.
@@ -1701,7 +1842,7 @@ git commit -m "feat: coverage math — attested-file union, null-safe rollups"
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "outDir": "out-int", "rootDir": "." },
-  "include": ["src/**/*.ts", "test/vscode-int/**/*.ts"]
+  "include": ["src/**/*.ts", "test/vscode-int/**/*.ts"],
 }
 ```
 
@@ -1721,15 +1862,21 @@ async function main(): Promise<void> {
   const ws = mkdtempSync(path.join(tmpdir(), 'vouch-fixture-'))
   cpSync(fixtureSrc, ws, { recursive: true })
   const g = (args: string[]) => execFileSync('git', args, { cwd: ws })
-  g(['init', '-q']); g(['config', 'user.name', 'Int Test']); g(['config', 'user.email', 'int@test.dev'])
-  g(['add', '-A']); g(['commit', '-q', '-m', 'fixture', '--allow-empty'])
+  g(['init', '-q'])
+  g(['config', 'user.name', 'Int Test'])
+  g(['config', 'user.email', 'int@test.dev'])
+  g(['add', '-A'])
+  g(['commit', '-q', '-m', 'fixture', '--allow-empty'])
   await runTests({
     extensionDevelopmentPath,
     extensionTestsPath,
     launchArgs: [ws, '--disable-extensions'],
   })
 }
-main().catch(err => { console.error(err); process.exit(1) })
+main().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})
 ```
 
 ```ts
@@ -1744,7 +1891,7 @@ export async function run(): Promise<void> {
   const files = await glob('**/*.test.js', { cwd: testsRoot })
   for (const f of files) mocha.addFile(path.resolve(testsRoot, f))
   await new Promise<void>((resolve, reject) => {
-    mocha.run(failures => failures ? reject(new Error(`${failures} tests failed`)) : resolve())
+    mocha.run((failures) => (failures ? reject(new Error(`${failures} tests failed`)) : resolve()))
   })
 }
 ```
@@ -1792,7 +1939,8 @@ import type { SymbolNode } from '../core/anchor'
 function kindClass(kind: vscode.SymbolKind): SymbolNode['kindClass'] {
   const K = vscode.SymbolKind
   if (kind === K.Function || kind === K.Method || kind === K.Constructor) return 'function'
-  if (kind === K.Class || kind === K.Interface || kind === K.Struct || kind === K.Enum) return 'class'
+  if (kind === K.Class || kind === K.Interface || kind === K.Struct || kind === K.Enum)
+    return 'class'
   return 'other'
 }
 
@@ -1823,7 +1971,10 @@ import * as path from 'node:path'
 import { ReviewStore } from '../core/store'
 import { repoRoot } from './gitinfo'
 
-export interface RootEntry { rootDir: string; store: ReviewStore }
+export interface RootEntry {
+  rootDir: string
+  store: ReviewStore
+}
 
 export class VouchContext {
   private readonly emitter = new vscode.EventEmitter<void>()
@@ -1886,7 +2037,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
   let timer: ReturnType<typeof setTimeout> | undefined
   const scheduleReload = (): void => {
     if (timer) clearTimeout(timer)
-    timer = setTimeout(() => { void ctx?.reload() }, 300)
+    timer = setTimeout(() => {
+      void ctx?.reload()
+    }, 300)
   }
   watcher.onDidCreate(scheduleReload)
   watcher.onDidChange(scheduleReload)
@@ -1916,11 +2069,13 @@ git commit -m "feat: vscode adapters (symbols, multi-root context) and integrati
 ### Task 11: Attestation commands — selection/function/class/file, auto-supersede, unvouch
 
 **Files:**
+
 - Create: `src/vscode/commands.ts`, `src/core/attest.ts`
 - Modify: `src/vscode/extension.ts` (register commands)
 - Test: `test/core/attest.test.ts`, extend `test/vscode-int/suite/extension.test.ts`
 
 **Interfaces:**
+
 - Consumes: everything above.
 - Produces:
   - `src/core/attest.ts` (pure):
@@ -1944,14 +2099,27 @@ const OTHER = { name: 'B', email: 'b@x.com' }
 const DOC = 'l1\nl2\nl3\nl4\nl5\nl6'
 
 const BASE = {
-  id: 'new1', author: AUTHOR, createdAt: '2026-07-13T00:00:00Z',
-  commit: 'c2', dirty: false, docText: DOC,
+  id: 'new1',
+  author: AUTHOR,
+  createdAt: '2026-07-13T00:00:00Z',
+  commit: 'c2',
+  dirty: false,
+  docText: DOC,
 }
 
 function existing(id: string, range: [number, number], author = AUTHOR) {
   const { hash, headHash } = hashRangeOfText(DOC, range)
-  const record: ReviewRecord = { id, author, createdAt: '2026-01-01T00:00:00Z', commit: 'c1',
-    dirty: false, kind: 'selection', range, hash, headHash }
+  const record: ReviewRecord = {
+    id,
+    author,
+    createdAt: '2026-01-01T00:00:00Z',
+    commit: 'c1',
+    dirty: false,
+    kind: 'selection',
+    range,
+    hash,
+    headHash,
+  }
   return { record, res: resolveRecord(record, DOC) }
 }
 
@@ -1974,16 +2142,25 @@ describe('buildRecord', () => {
     const mine = existing('old1', [3, 5])
     const other = existing('old2', [3, 5], OTHER)
     const far = existing('old3', [6, 6])
-    const r = buildRecord({ ...BASE, kind: 'selection', range: [2, 4],
-      existingCurrent: [mine, other, far] })
+    const r = buildRecord({
+      ...BASE,
+      kind: 'selection',
+      range: [2, 4],
+      existingCurrent: [mine, other, far],
+    })
     expect(r.supersedes).toEqual(['old1'])
   })
 
   it('same symbol path counts as overlap even if ranges moved apart', () => {
     const mine = existing('old1', [1, 2])
     mine.record.symbol = 'AuthService/login'
-    const r = buildRecord({ ...BASE, kind: 'function', symbol: 'AuthService/login',
-      range: [5, 6], existingCurrent: [mine] })
+    const r = buildRecord({
+      ...BASE,
+      kind: 'function',
+      symbol: 'AuthService/login',
+      range: [5, 6],
+      existingCurrent: [mine],
+    })
     expect(r.supersedes).toEqual(['old1'])
   })
 
@@ -2031,13 +2208,14 @@ export function buildRecord(params: {
 }): ReviewRecord {
   const { kind, range, docText } = params
 
-  const mine = params.existingCurrent.filter(
-    e => e.record.author.email === params.author.email)
-  const superseded = mine.filter(e => {
-    if (kind === 'file') return true
-    if (params.symbol && e.record.symbol === params.symbol) return true
-    return range ? overlaps(e.res.effectiveRange, range) : false
-  }).map(e => e.record.id)
+  const mine = params.existingCurrent.filter((e) => e.record.author.email === params.author.email)
+  const superseded = mine
+    .filter((e) => {
+      if (kind === 'file') return true
+      if (params.symbol && e.record.symbol === params.symbol) return true
+      return range ? overlaps(e.res.effectiveRange, range) : false
+    })
+    .map((e) => e.record.id)
 
   const rec: ReviewRecord = {
     id: params.id,
@@ -2084,14 +2262,14 @@ import type { VouchContext } from './context'
 import { documentSymbols } from './symbols'
 import { headSha, identity, isDirty } from './gitinfo'
 
-async function resolveAuthor(
-  extCtx: vscode.ExtensionContext, cwd: string,
-): Promise<Author | null> {
+async function resolveAuthor(extCtx: vscode.ExtensionContext, cwd: string): Promise<Author | null> {
   const fromGit = await identity(cwd)
   if (fromGit) return fromGit
   const saved = extCtx.globalState.get<Author>('vouch.identity')
   if (saved) return saved
-  const name = await vscode.window.showInputBox({ prompt: 'Vouch: your name (no git identity found)' })
+  const name = await vscode.window.showInputBox({
+    prompt: 'Vouch: your name (no git identity found)',
+  })
   if (!name) return null
   const email = await vscode.window.showInputBox({ prompt: 'Vouch: your email' })
   if (!email) return null
@@ -2102,7 +2280,9 @@ async function resolveAuthor(
 
 /** Shared state each command needs about the active editor. */
 async function editorState(ctx: VouchContext): Promise<{
-  editor: vscode.TextEditor; rootDir: string; sourcePath: string
+  editor: vscode.TextEditor
+  rootDir: string
+  sourcePath: string
 } | null> {
   const editor = vscode.window.activeTextEditor
   if (!editor || editor.document.uri.scheme !== 'file') {
@@ -2119,16 +2299,22 @@ async function editorState(ctx: VouchContext): Promise<{
 }
 
 export function currentResolved(
-  ctx: VouchContext, rootDir: string, sourcePath: string, docText: string,
+  ctx: VouchContext,
+  rootDir: string,
+  sourcePath: string,
+  docText: string,
 ): { record: ReviewRecord; res: ReturnType<typeof resolveRecord> }[] {
-  const root = ctx.roots.find(r => r.rootDir === rootDir)
+  const root = ctx.roots.find((r) => r.rootDir === rootDir)
   const state = root?.store.stateFor(sourcePath)
   if (!state) return []
-  return state.current.map(record => ({ record, res: resolveRecord(record, docText) }))
+  return state.current.map((record) => ({ record, res: resolveRecord(record, docText) }))
 }
 
 async function attest(
-  extCtx: vscode.ExtensionContext, ctx: VouchContext, refresh: () => void, kind: RecordKind,
+  extCtx: vscode.ExtensionContext,
+  ctx: VouchContext,
+  refresh: () => void,
+  kind: RecordKind,
 ): Promise<void> {
   const st = await editorState(ctx)
   if (!st) return
@@ -2145,7 +2331,8 @@ async function attest(
     const found = enclosingSymbol(symbols, editor.selection.active.line + 1, kind)
     if (!found) {
       void vscode.window.showInformationMessage(
-        `Vouch: no enclosing ${kind} symbol — select lines and use "Review selected lines".`)
+        `Vouch: no enclosing ${kind} symbol — select lines and use "Review selected lines".`,
+      )
       return
     }
     range = found.range
@@ -2155,7 +2342,9 @@ async function attest(
   const author = await resolveAuthor(extCtx, rootDir)
   if (!author) return
   const comment = await vscode.window.showInputBox({
-    prompt: 'Vouch: optional comment (Enter to skip)', value: '' })
+    prompt: 'Vouch: optional comment (Enter to skip)',
+    value: '',
+  })
   if (comment === undefined) return // Esc cancels
 
   const commit = (await headSha(rootDir)) ?? ''
@@ -2163,8 +2352,15 @@ async function attest(
   const docText = doc.getText()
 
   const rec = buildRecord({
-    id: randomUUID(), author, createdAt: new Date().toISOString(),
-    commit, dirty, kind, symbol, range, docText,
+    id: randomUUID(),
+    author,
+    createdAt: new Date().toISOString(),
+    commit,
+    dirty,
+    kind,
+    symbol,
+    range,
+    docText,
     comment: comment || undefined,
     existingCurrent: currentResolved(ctx, rootDir, sourcePath, docText),
   })
@@ -2174,7 +2370,9 @@ async function attest(
 }
 
 async function unvouch(
-  extCtx: vscode.ExtensionContext, ctx: VouchContext, refresh: () => void,
+  extCtx: vscode.ExtensionContext,
+  ctx: VouchContext,
+  refresh: () => void,
 ): Promise<void> {
   const st = await editorState(ctx)
   if (!st) return
@@ -2183,16 +2381,23 @@ async function unvouch(
   if (!author) return
   const line = editor.selection.active.line + 1
   const docText = editor.document.getText()
-  const targets = currentResolved(ctx, rootDir, sourcePath, docText).filter(e =>
-    e.record.author.email === author.email &&
-    (e.record.kind === 'file' || overlaps(e.res.effectiveRange, [line, line])))
+  const targets = currentResolved(ctx, rootDir, sourcePath, docText).filter(
+    (e) =>
+      e.record.author.email === author.email &&
+      (e.record.kind === 'file' || overlaps(e.res.effectiveRange, [line, line])),
+  )
   if (targets.length === 0) {
     void vscode.window.showInformationMessage('Vouch: none of your reviews cover this line.')
     return
   }
   for (const t of targets) {
-    const tomb: Tombstone = { id: randomUUID(), author, createdAt: new Date().toISOString(),
-      revokes: t.record.id, reason: 'unvouch' }
+    const tomb: Tombstone = {
+      id: randomUUID(),
+      author,
+      createdAt: new Date().toISOString(),
+      revokes: t.record.id,
+      reason: 'unvouch',
+    }
     await appendLine(rootDir, sourcePath, authorSlug(author.email), tomb)
   }
   await ctx.reload()
@@ -2200,7 +2405,9 @@ async function unvouch(
 }
 
 export function registerCommands(
-  extCtx: vscode.ExtensionContext, ctx: VouchContext, refresh: () => void,
+  extCtx: vscode.ExtensionContext,
+  ctx: VouchContext,
+  refresh: () => void,
 ): void {
   const reg = (id: string, fn: () => Promise<void> | void): void => {
     extCtx.subscriptions.push(vscode.commands.registerCommand(id, fn))
@@ -2285,11 +2492,13 @@ git commit -m "feat: attestation commands with auto-supersede and unvouch tombst
 ### Task 12: Refresh pipeline + gutter decorations
 
 **Files:**
+
 - Create: `src/vscode/gutter.ts`, `src/vscode/pipeline.ts`
 - Modify: `src/vscode/extension.ts`
 - Test: extend `test/vscode-int/suite/extension.test.ts`
 
 **Interfaces:**
+
 - Consumes: `resolveRecord`, `documentSymbols`, `resolveSymbolPath`, `VouchContext`, `currentResolved` (Tasks 8, 10, 11).
 - Produces:
   - `src/vscode/pipeline.ts`:
@@ -2316,8 +2525,9 @@ describe('status pipeline', () => {
     assert.strictEqual(st.entries[0].res.status, 'reviewed')
     assert.deepStrictEqual(st.entries[0].res.effectiveRange, [1, 3])
 
-    await editor.edit(b => b.replace(
-      new vscode.Range(1, 0, 1, doc.lineAt(1).text.length), '  return a + b + 1'))
+    await editor.edit((b) =>
+      b.replace(new vscode.Range(1, 0, 1, doc.lineAt(1).text.length), '  return a + b + 1'),
+    )
     st = await api.pipeline.statusFor(doc)
     assert.strictEqual(st.entries[0].res.status, 'dismissed')
 
@@ -2354,14 +2564,22 @@ export class StatusPipeline {
   private gen = 0
   private timers = new Map<string, ReturnType<typeof setTimeout>>()
 
-  constructor(private readonly ctx: VouchContext, subscriptions: vscode.Disposable[]) {
+  constructor(
+    private readonly ctx: VouchContext,
+    subscriptions: vscode.Disposable[],
+  ) {
     subscriptions.push(
-      vscode.workspace.onDidChangeTextDocument(e => this.schedule(e.document)),
-      ctx.onDidChange(() => { this.invalidate(); this.refreshVisible() }),
+      vscode.workspace.onDidChangeTextDocument((e) => this.schedule(e.document)),
+      ctx.onDidChange(() => {
+        this.invalidate()
+        this.refreshVisible()
+      }),
     )
   }
 
-  invalidate(): void { this.gen++ }
+  invalidate(): void {
+    this.gen++
+  }
 
   refreshVisible(): void {
     for (const ed of vscode.window.visibleTextEditors) {
@@ -2373,9 +2591,12 @@ export class StatusPipeline {
     const key = doc.uri.toString()
     const t = this.timers.get(key)
     if (t) clearTimeout(t)
-    this.timers.set(key, setTimeout(() => {
-      void this.statusFor(doc).then(() => this.emitter.fire(doc.uri))
-    }, 300))
+    this.timers.set(
+      key,
+      setTimeout(() => {
+        void this.statusFor(doc).then(() => this.emitter.fire(doc.uri))
+      }, 300),
+    )
   }
 
   async statusFor(doc: vscode.TextDocument): Promise<FileStatus> {
@@ -2391,12 +2612,13 @@ export class StatusPipeline {
     if (!state || state.current.length === 0) return empty
 
     const docText = doc.getText()
-    const needSymbols = state.current.some(r => r.symbol)
+    const needSymbols = state.current.some((r) => r.symbol)
     const symbols = needSymbols ? await documentSymbols(doc.uri) : []
 
-    const entries = state.current.map(record => {
+    const entries = state.current.map((record) => {
       const symRange = record.symbol
-        ? resolveSymbolPath(symbols, record.symbol)?.range ?? null : null
+        ? (resolveSymbolPath(symbols, record.symbol)?.range ?? null)
+        : null
       return { record, res: resolveRecord(record, docText, symRange) }
     })
     const status: FileStatus = { entries, coverage: fileCoverage(entries, docText) }
@@ -2416,15 +2638,18 @@ export class Gutter {
   private readonly dismissed: vscode.TextEditorDecorationType
 
   constructor(extensionUri: vscode.Uri) {
-    const icon = (name: string): vscode.Uri =>
-      vscode.Uri.joinPath(extensionUri, 'media', name)
+    const icon = (name: string): vscode.Uri => vscode.Uri.joinPath(extensionUri, 'media', name)
     this.reviewed = vscode.window.createTextEditorDecorationType({
-      gutterIconPath: icon('reviewed.svg'), gutterIconSize: 'contain',
-      overviewRulerColor: '#2ea043', overviewRulerLane: vscode.OverviewRulerLane.Right,
+      gutterIconPath: icon('reviewed.svg'),
+      gutterIconSize: 'contain',
+      overviewRulerColor: '#2ea043',
+      overviewRulerLane: vscode.OverviewRulerLane.Right,
     })
     this.dismissed = vscode.window.createTextEditorDecorationType({
-      gutterIconPath: icon('dismissed.svg'), gutterIconSize: 'contain',
-      overviewRulerColor: '#d29922', overviewRulerLane: vscode.OverviewRulerLane.Right,
+      gutterIconPath: icon('dismissed.svg'),
+      gutterIconSize: 'contain',
+      overviewRulerColor: '#d29922',
+      overviewRulerLane: vscode.OverviewRulerLane.Right,
     })
   }
 
@@ -2436,7 +2661,8 @@ export class Gutter {
       byLine.set(line, prev === 'dismissed' ? 'dismissed' : res.status) // dismissed wins
     }
     const ranges = (want: 'reviewed' | 'dismissed'): vscode.Range[] =>
-      [...byLine.entries()].filter(([, s]) => s === want)
+      [...byLine.entries()]
+        .filter(([, s]) => s === want)
         .map(([l]) => new vscode.Range(l - 1, 0, l - 1, 0))
     editor.setDecorations(this.reviewed, ranges('reviewed'))
     editor.setDecorations(this.dismissed, ranges('dismissed'))
@@ -2462,14 +2688,20 @@ context.subscriptions.push(gutter)
 const applyTo = async (editor: vscode.TextEditor): Promise<void> => {
   gutter.apply(editor, await pipeline.statusFor(editor.document))
 }
-refresh = () => { pipeline.invalidate(); pipeline.refreshVisible() }
-pipeline.onDidUpdate(uri => {
+refresh = () => {
+  pipeline.invalidate()
+  pipeline.refreshVisible()
+}
+pipeline.onDidUpdate((uri) => {
   for (const ed of vscode.window.visibleTextEditors) {
     if (ed.document.uri.toString() === uri.toString()) void applyTo(ed)
   }
 })
 context.subscriptions.push(
-  vscode.window.onDidChangeVisibleTextEditors(eds => { for (const e of eds) void applyTo(e) }))
+  vscode.window.onDidChangeVisibleTextEditors((eds) => {
+    for (const e of eds) void applyTo(e)
+  }),
+)
 for (const e of vscode.window.visibleTextEditors) void applyTo(e)
 
 return { getTestApi: () => ({ context: ctx!, pipeline }) }
@@ -2492,16 +2724,18 @@ git commit -m "feat: status pipeline with per-document cache and gutter decorati
 ### Task 13: Hovers — range timeline + call-site status
 
 **Files:**
+
 - Create: `src/core/hovermd.ts`, `src/vscode/hovers.ts`
 - Modify: `src/vscode/extension.ts`
 - Test: `test/core/hovermd.test.ts`, extend integration suite
 
 **Interfaces:**
+
 - Consumes: `FileStatus`, `StatusPipeline`, `commitUrl`, `ChainState` (Tasks 3, 6, 12).
 - Produces:
   - `src/core/hovermd.ts` (pure — returns markdown strings):
     - `interface HoverEntry { authorName: string; status: 'reviewed' | 'dismissed'; createdAt: string; comment?: string; commit: string; commitLink: string | null; recordId: string }`
-    - `rangeHoverMd(entries: HoverEntry[], nowIso: string): string` — per-user lines `**✓ reviewed** — San, 2d ago (\`abc1234\`)`, optional `> comment`, then command links: `[Open timeline](command:vouch.openTimeline?...)`, `[Diff since review](command:vouch.showDiff?...)`, `[Re-review](command:vouch.reReview?...)` — args = `encodeURIComponent(JSON.stringify([recordId]))`.
+    - `rangeHoverMd(entries: HoverEntry[], nowIso: string): string` — per-user lines `**✓ reviewed** — San, 2d ago (\`abc1234\`)`, optional `> comment`, then command links: `[Open timeline](command:vouch.openTimeline?...)`, `[Diff since review](command:vouch.showDiff?...)`, `[Re-review](command:vouch.reReview?...)`— args =`encodeURIComponent(JSON.stringify([recordId]))`.
     - `callSiteMd(entries: { authorName: string; status: 'reviewed' | 'dismissed'; createdAt: string }[], nowIso: string): string` — one line per author: `Vouch: ✓ reviewed — San, 2d ago`.
     - `relTime(fromIso: string, toIso: string): string` — `just now` (<60 s), `5m ago`, `3h ago`, `2d ago`.
   - `src/vscode/hovers.ts`: `registerHovers(context, ctx: VouchContext, pipeline: StatusPipeline): void`
@@ -2529,11 +2763,20 @@ describe('relTime', () => {
 
 describe('rangeHoverMd', () => {
   it('renders status, author, time, short sha, comment, command links', () => {
-    const md = rangeHoverMd([{
-      authorName: 'San', status: 'reviewed', createdAt: '2026-07-11T12:00:00Z',
-      comment: 'checked errors', commit: 'abc1234def5678', commitLink: 'https://x/commit/abc1234def5678',
-      recordId: 'r1',
-    }], NOW)
+    const md = rangeHoverMd(
+      [
+        {
+          authorName: 'San',
+          status: 'reviewed',
+          createdAt: '2026-07-11T12:00:00Z',
+          comment: 'checked errors',
+          commit: 'abc1234def5678',
+          commitLink: 'https://x/commit/abc1234def5678',
+          recordId: 'r1',
+        },
+      ],
+      NOW,
+    )
     expect(md).toContain('✓ reviewed')
     expect(md).toContain('San')
     expect(md).toContain('2d ago')
@@ -2544,8 +2787,19 @@ describe('rangeHoverMd', () => {
     expect(md).toContain('command:vouch.openTimeline?')
   })
   it('dismissed uses warning glyph and label', () => {
-    const md = rangeHoverMd([{ authorName: 'San', status: 'dismissed',
-      createdAt: NOW, commit: '', commitLink: null, recordId: 'r1' }], NOW)
+    const md = rangeHoverMd(
+      [
+        {
+          authorName: 'San',
+          status: 'dismissed',
+          createdAt: NOW,
+          commit: '',
+          commitLink: null,
+          recordId: 'r1',
+        },
+      ],
+      NOW,
+    )
     expect(md).toContain('⚠ dismissed (changed since review)')
     expect(md).not.toContain('](null')
   })
@@ -2553,10 +2807,13 @@ describe('rangeHoverMd', () => {
 
 describe('callSiteMd', () => {
   it('one line per author', () => {
-    const md = callSiteMd([
-      { authorName: 'San', status: 'reviewed', createdAt: '2026-07-11T12:00:00Z' },
-      { authorName: 'Bob', status: 'dismissed', createdAt: NOW },
-    ], NOW)
+    const md = callSiteMd(
+      [
+        { authorName: 'San', status: 'reviewed', createdAt: '2026-07-11T12:00:00Z' },
+        { authorName: 'Bob', status: 'dismissed', createdAt: NOW },
+      ],
+      NOW,
+    )
     expect(md).toContain('Vouch: ✓ reviewed — San, 2d ago')
     expect(md).toContain('Vouch: ⚠ dismissed (changed since review) — Bob')
   })
@@ -2603,12 +2860,15 @@ export function rangeHoverMd(entries: HoverEntry[], nowIso: string): string {
   for (const e of entries) {
     const sha = e.commit ? e.commit.slice(0, 7) : ''
     const shaMd = !sha ? '' : e.commitLink ? ` ([\`${sha}\`](${e.commitLink}))` : ` (\`${sha}\`)`
-    parts.push(`**${statusLabel(e.status)}** — ${e.authorName}, ${relTime(e.createdAt, nowIso)}${shaMd}`)
+    parts.push(
+      `**${statusLabel(e.status)}** — ${e.authorName}, ${relTime(e.createdAt, nowIso)}${shaMd}`,
+    )
     if (e.comment) parts.push(`> ${e.comment}`)
     parts.push(
       `[Open timeline](${cmd('vouch.openTimeline', e.recordId)}) · ` +
-      `[Diff since review](${cmd('vouch.showDiff', e.recordId)}) · ` +
-      `[Re-review](${cmd('vouch.reReview', e.recordId)})`)
+        `[Diff since review](${cmd('vouch.showDiff', e.recordId)}) · ` +
+        `[Re-review](${cmd('vouch.reReview', e.recordId)})`,
+    )
   }
   return parts.join('\n\n')
 }
@@ -2617,9 +2877,11 @@ export function callSiteMd(
   entries: { authorName: string; status: 'reviewed' | 'dismissed'; createdAt: string }[],
   nowIso: string,
 ): string {
-  return entries.map(e =>
-    `Vouch: ${statusLabel(e.status)} — ${e.authorName}, ${relTime(e.createdAt, nowIso)}`,
-  ).join('\n\n')
+  return entries
+    .map(
+      (e) => `Vouch: ${statusLabel(e.status)} — ${e.authorName}, ${relTime(e.createdAt, nowIso)}`,
+    )
+    .join('\n\n')
 }
 ```
 
@@ -2641,7 +2903,9 @@ import type { StatusPipeline } from './pipeline'
 import { remoteUrl } from './gitinfo'
 
 export function registerHovers(
-  context: vscode.ExtensionContext, ctx: VouchContext, pipeline: StatusPipeline,
+  context: vscode.ExtensionContext,
+  ctx: VouchContext,
+  pipeline: StatusPipeline,
 ): void {
   const remoteCache = new Map<string, string | null>()
   const defCache = new Map<string, vscode.Location | null>()
@@ -2653,17 +2917,18 @@ export function registerHovers(
 
   const provider: vscode.HoverProvider = {
     async provideHover(doc, pos, token) {
-      if (!ctx.roots.some(r => r.store.attestedFiles().length > 0)) return undefined
+      if (!ctx.roots.some((r) => r.store.attestedFiles().length > 0)) return undefined
       const line = pos.line + 1
 
       // (a) range hover — records covering this line in THIS document
       const status = await pipeline.statusFor(doc)
-      const covering = status.entries.filter(e =>
-        e.record.kind === 'file' || overlaps(e.res.effectiveRange, [line, line]))
+      const covering = status.entries.filter(
+        (e) => e.record.kind === 'file' || overlaps(e.res.effectiveRange, [line, line]),
+      )
       if (covering.length > 0) {
         const root = ctx.rootFor(doc.uri)!
         const remote = await remoteFor(root.rootDir)
-        const entries: HoverEntry[] = covering.map(e => ({
+        const entries: HoverEntry[] = covering.map((e) => ({
           authorName: e.record.author.name,
           status: e.res.status,
           createdAt: e.record.createdAt,
@@ -2684,35 +2949,44 @@ export function registerHovers(
         const lookup = vscode.commands.executeCommand<
           (vscode.Location | vscode.LocationLink)[] | undefined
         >('vscode.executeDefinitionProvider', doc.uri, pos)
-        const timeout = new Promise<null>(r => setTimeout(() => r(null), 400))
+        const timeout = new Promise<null>((r) => setTimeout(() => r(null), 400))
         const res = await Promise.race([lookup, timeout])
         if (token.isCancellationRequested) return undefined
         const first = res?.[0]
-        target = !first ? null
-          : first instanceof vscode.Location ? first
-          : new vscode.Location(first.targetUri, first.targetRange)
+        target = !first
+          ? null
+          : first instanceof vscode.Location
+            ? first
+            : new vscode.Location(first.targetUri, first.targetRange)
         defCache.set(key, target)
         if (defCache.size > 500) defCache.clear()
       }
       if (!target || target.uri.toString() === doc.uri.toString()) return undefined
       const targetDoc = vscode.workspace.textDocuments.find(
-        d => d.uri.toString() === target!.uri.toString())
+        (d) => d.uri.toString() === target!.uri.toString(),
+      )
       if (!targetDoc) return undefined
       const tStatus = await pipeline.statusFor(targetDoc)
-      const tLine: [number, number] =
-        [target.range.start.line + 1, target.range.end.line + 1]
-      const hits = tStatus.entries.filter(e =>
-        e.record.kind === 'file' || overlaps(e.res.effectiveRange, tLine))
+      const tLine: [number, number] = [target.range.start.line + 1, target.range.end.line + 1]
+      const hits = tStatus.entries.filter(
+        (e) => e.record.kind === 'file' || overlaps(e.res.effectiveRange, tLine),
+      )
       if (hits.length === 0) return undefined
-      const md = new vscode.MarkdownString(callSiteMd(hits.map(e => ({
-        authorName: e.record.author.name, status: e.res.status, createdAt: e.record.createdAt,
-      })), new Date().toISOString()))
+      const md = new vscode.MarkdownString(
+        callSiteMd(
+          hits.map((e) => ({
+            authorName: e.record.author.name,
+            status: e.res.status,
+            createdAt: e.record.createdAt,
+          })),
+          new Date().toISOString(),
+        ),
+      )
       return new vscode.Hover(md)
       // NOTE: never call executeHoverProvider here — infinite recursion.
     },
   }
-  context.subscriptions.push(
-    vscode.languages.registerHoverProvider({ scheme: 'file' }, provider))
+  context.subscriptions.push(vscode.languages.registerHoverProvider({ scheme: 'file' }, provider))
 }
 ```
 
@@ -2727,9 +3001,14 @@ describe('range hover', () => {
     const doc = await vscode.workspace.openTextDocument(path.join(ws, 'src/calc.ts'))
     await vscode.window.showTextDocument(doc)
     const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
-      'vscode.executeHoverProvider', doc.uri, new vscode.Position(0, 2))
-    const all = hovers.flatMap(h => h.contents)
-      .map(c => typeof c === 'string' ? c : (c as vscode.MarkdownString).value).join('\n')
+      'vscode.executeHoverProvider',
+      doc.uri,
+      new vscode.Position(0, 2),
+    )
+    const all = hovers
+      .flatMap((h) => h.contents)
+      .map((c) => (typeof c === 'string' ? c : (c as vscode.MarkdownString).value))
+      .join('\n')
     assert.match(all, /reviewed|dismissed/)
     assert.match(all, /Vouch|timeline/i)
   })
@@ -2753,11 +3032,13 @@ git commit -m "feat: range timeline hover and cached call-site status hover"
 ### Task 14: Diff since review + open commit on web
 
 **Files:**
+
 - Create: `src/vscode/diff.ts`, `src/core/baseline.ts`
 - Modify: `src/vscode/commands.ts` (register `vouch.showDiff`, `vouch.openCommitOnWeb`), `src/vscode/extension.ts`
 - Test: `test/core/baseline.test.ts`
 
 **Interfaces:**
+
 - Consumes: `showAtCommit`, `commitUrl`, `remoteUrl` (Task 6); `splitLines`, `hashLines` (Task 2); pipeline (Task 12).
 - Produces:
   - `src/core/baseline.ts` (pure): `baselineSlice(committedText: string, record: ReviewRecord): { text: string; verified: true } | { text: string; verified: false }` — slice `committedText` at `record.range` (whole file for `kind='file'`); `verified` = slice hash equals `record.hash` (spec §7: use slice only when verified).
@@ -2778,9 +3059,21 @@ import { sha256, normalizeEol } from '../../src/core/text'
 import type { ReviewRecord } from '../../src/core/types'
 
 const COMMITTED = 'a\nb\nc\nd\ne\n'
-function rec(range: [number, number], hash: string, kind: 'selection' | 'file' = 'selection'): ReviewRecord {
-  return { id: 'r', author: { name: 'S', email: 's@x.com' }, createdAt: '2026-01-01T00:00:00Z',
-    commit: 'c', dirty: false, kind, range: kind === 'file' ? undefined : range, hash }
+function rec(
+  range: [number, number],
+  hash: string,
+  kind: 'selection' | 'file' = 'selection',
+): ReviewRecord {
+  return {
+    id: 'r',
+    author: { name: 'S', email: 's@x.com' },
+    createdAt: '2026-01-01T00:00:00Z',
+    commit: 'c',
+    dirty: false,
+    kind,
+    range: kind === 'file' ? undefined : range,
+    hash,
+  }
 }
 
 describe('baselineSlice', () => {
@@ -2820,7 +3113,8 @@ import { hashLines, normalizeEol, sha256, splitLines } from './text'
 import type { ReviewRecord } from './types'
 
 export function baselineSlice(
-  committedText: string, record: ReviewRecord,
+  committedText: string,
+  record: ReviewRecord,
 ): { text: string; verified: boolean } {
   if (record.kind === 'file') {
     return { text: committedText, verified: sha256(normalizeEol(committedText)) === record.hash }
@@ -2868,13 +3162,14 @@ function register(text: string, label: string): vscode.Uri {
 }
 
 export function findRecord(
-  ctx: VouchContext, recordId: string,
+  ctx: VouchContext,
+  recordId: string,
 ): { record: ReviewRecord; rootDir: string; sourcePath: string } | null {
   for (const root of ctx.roots) {
     for (const sourcePath of root.store.attestedFiles()) {
       const state = root.store.stateFor(sourcePath)!
       for (const members of state.chains.values()) {
-        const record = members.find(m => m.id === recordId)
+        const record = members.find((m) => m.id === recordId)
         if (record) return { record, rootDir: root.rootDir, sourcePath }
       }
     }
@@ -2883,18 +3178,27 @@ export function findRecord(
 }
 
 export async function showDiff(
-  ctx: VouchContext, pipeline: StatusPipeline, recordId: string,
+  ctx: VouchContext,
+  pipeline: StatusPipeline,
+  recordId: string,
 ): Promise<void> {
   const found = findRecord(ctx, recordId)
-  if (!found) { void vscode.window.showWarningMessage('Vouch: record not found.'); return }
+  if (!found) {
+    void vscode.window.showWarningMessage('Vouch: record not found.')
+    return
+  }
   const { record, rootDir, sourcePath } = found
   if (!record.commit) {
-    void vscode.window.showWarningMessage('Vouch: review has no commit (not a git repo at review time).')
+    void vscode.window.showWarningMessage(
+      'Vouch: review has no commit (not a git repo at review time).',
+    )
     return
   }
   const committed = await showAtCommit(rootDir, record.commit, sourcePath)
   if (committed === null) {
-    void vscode.window.showWarningMessage(`Vouch: commit ${record.commit.slice(0, 7)} not available locally.`)
+    void vscode.window.showWarningMessage(
+      `Vouch: commit ${record.commit.slice(0, 7)} not available locally.`,
+    )
     return
   }
   const sha7 = record.commit.slice(0, 7)
@@ -2904,21 +3208,31 @@ export async function showDiff(
   if (base.verified && record.kind !== 'file') {
     const doc = await vscode.workspace.openTextDocument(fileUri)
     const status = await pipeline.statusFor(doc)
-    const entry = status.entries.find(e => e.record.id === recordId)
+    const entry = status.entries.find((e) => e.record.id === recordId)
     const range = entry?.res.effectiveRange ?? record.range ?? [1, 1]
-    const currentSlice = splitLines(doc.getText()).slice(range[0] - 1, range[1]).join('\n')
-    await vscode.commands.executeCommand('vscode.diff',
-      register(base.text, `baseline-${sha7}`), register(currentSlice, 'current'),
-      `Vouch: since ${sha7}`)
+    const currentSlice = splitLines(doc.getText())
+      .slice(range[0] - 1, range[1])
+      .join('\n')
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      register(base.text, `baseline-${sha7}`),
+      register(currentSlice, 'current'),
+      `Vouch: since ${sha7}`,
+    )
     return
   }
 
   if (!base.verified) {
     void vscode.window.showWarningMessage(
-      `Vouch: reviewed text was not in commit ${sha7} — showing nearest baseline.`)
+      `Vouch: reviewed text was not in commit ${sha7} — showing nearest baseline.`,
+    )
   }
-  await vscode.commands.executeCommand('vscode.diff',
-    register(committed, `baseline-${sha7}`), fileUri, `Vouch: since ${sha7} (whole file)`)
+  await vscode.commands.executeCommand(
+    'vscode.diff',
+    register(committed, `baseline-${sha7}`),
+    fileUri,
+    `Vouch: since ${sha7} (whole file)`,
+  )
 }
 ```
 
@@ -2933,11 +3247,15 @@ reg2('vouch.showDiff', (recordId: string) => showDiff(ctx, pipeline, recordId))
 reg2('vouch.openCommitOnWeb', async (recordId: string) => {
   const found = findRecord(ctx, recordId)
   if (!found?.record.commit) {
-    void vscode.window.showInformationMessage('Vouch: no commit recorded.'); return
+    void vscode.window.showInformationMessage('Vouch: no commit recorded.')
+    return
   }
   const remote = await remoteUrl(found.rootDir)
   const url = remote ? commitUrl(remote, found.record.commit) : null
-  if (!url) { void vscode.window.showInformationMessage('Vouch: no recognizable git remote.'); return }
+  if (!url) {
+    void vscode.window.showInformationMessage('Vouch: no recognizable git remote.')
+    return
+  }
   void vscode.env.openExternal(vscode.Uri.parse(url))
 })
 // where reg2 registers a command taking one string arg:
@@ -2950,8 +3268,12 @@ In `extension.ts`: register the content provider —
 
 ```ts
 import { VouchBaselineProvider } from './diff'
-context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(
-  VouchBaselineProvider.scheme, new VouchBaselineProvider()))
+context.subscriptions.push(
+  vscode.workspace.registerTextDocumentContentProvider(
+    VouchBaselineProvider.scheme,
+    new VouchBaselineProvider(),
+  ),
+)
 ```
 
 and pass `pipeline` into `registerCommands`.
@@ -2973,10 +3295,12 @@ git commit -m "feat: verified diff-since-review with dirty-baseline fallback, op
 ### Task 15: Re-review + re-attach
 
 **Files:**
+
 - Modify: `src/vscode/commands.ts` (add `vouch.reReview`, `vouch.reattach`), `src/core/attest.ts` (add `buildReattachLines`)
 - Test: `test/core/reattach.test.ts`, extend `test/core/attest.test.ts` if needed
 
 **Interfaces:**
+
 - Consumes: `findRecord` (Task 14), `buildRecord` (Task 11), store/writer.
 - Produces:
   - `buildReattachLines(records: ReviewRecord[], newSourcePath: string, idGen: () => string, nowIso: string, reattachedBy: Author): { copies: ReviewRecord[]; tombstones: Tombstone[] }` (attest.ts) — per record: copy with fresh id, original `author`/`createdAt`/`comment`/`hash`/`headHash`/`range`/`kind`/`symbol` preserved, `movedFrom: <old id>`; tombstone in old file `{ revokes: <old id>, reason: 'moved', movedTo: newSourcePath, author: reattachedBy, createdAt: nowIso }` (spec §7 re-attach mechanics).
@@ -2998,29 +3322,64 @@ const BOB = { name: 'Bob', email: 'b@x.com' }
 const NOW = '2026-07-13T12:00:00Z'
 
 const RECORDS: ReviewRecord[] = [
-  { id: 'a1', author: SAN, createdAt: '2026-01-01T00:00:00Z', commit: 'c1', dirty: false,
-    kind: 'function', symbol: 'f', range: [1, 3], hash: 'sha256:h1', headHash: 'sha256:hh1',
-    comment: 'ok' },
-  { id: 'b1', author: BOB, createdAt: '2026-02-01T00:00:00Z', commit: 'c2', dirty: true,
-    kind: 'selection', range: [5, 6], hash: 'sha256:h2', headHash: 'sha256:hh2' },
+  {
+    id: 'a1',
+    author: SAN,
+    createdAt: '2026-01-01T00:00:00Z',
+    commit: 'c1',
+    dirty: false,
+    kind: 'function',
+    symbol: 'f',
+    range: [1, 3],
+    hash: 'sha256:h1',
+    headHash: 'sha256:hh1',
+    comment: 'ok',
+  },
+  {
+    id: 'b1',
+    author: BOB,
+    createdAt: '2026-02-01T00:00:00Z',
+    commit: 'c2',
+    dirty: true,
+    kind: 'selection',
+    range: [5, 6],
+    hash: 'sha256:h2',
+    headHash: 'sha256:hh2',
+  },
 ]
 
 describe('buildReattachLines', () => {
   it('copies preserve author/createdAt/hash and link movedFrom; tombstones mark moved', () => {
     let n = 0
     const { copies, tombstones } = buildReattachLines(
-      RECORDS, 'src/new.ts', () => `id${n++}`, NOW, SAN)
+      RECORDS,
+      'src/new.ts',
+      () => `id${n++}`,
+      NOW,
+      SAN,
+    )
 
     expect(copies).toHaveLength(2)
     expect(copies[0]).toMatchObject({
-      id: 'id0', movedFrom: 'a1', author: SAN, createdAt: '2026-01-01T00:00:00Z',
-      hash: 'sha256:h1', headHash: 'sha256:hh1', comment: 'ok', kind: 'function', symbol: 'f',
+      id: 'id0',
+      movedFrom: 'a1',
+      author: SAN,
+      createdAt: '2026-01-01T00:00:00Z',
+      hash: 'sha256:h1',
+      headHash: 'sha256:hh1',
+      comment: 'ok',
+      kind: 'function',
+      symbol: 'f',
     })
     expect(copies[1]!.author).toEqual(BOB) // authorship preserved, not re-attacher
 
     expect(tombstones).toHaveLength(2)
     expect(tombstones[0]).toMatchObject({
-      revokes: 'a1', reason: 'moved', movedTo: 'src/new.ts', author: SAN, createdAt: NOW,
+      revokes: 'a1',
+      reason: 'moved',
+      movedTo: 'src/new.ts',
+      author: SAN,
+      createdAt: NOW,
     })
     expect(tombstones[0]!.id).not.toBe(copies[0]!.id)
   })
@@ -3039,15 +3398,24 @@ Expected: FAIL — `buildReattachLines` not exported.
 import type { Tombstone } from './types'
 
 export function buildReattachLines(
-  records: ReviewRecord[], newSourcePath: string,
-  idGen: () => string, nowIso: string, reattachedBy: Author,
+  records: ReviewRecord[],
+  newSourcePath: string,
+  idGen: () => string,
+  nowIso: string,
+  reattachedBy: Author,
 ): { copies: ReviewRecord[]; tombstones: Tombstone[] } {
   const copies: ReviewRecord[] = []
   const tombstones: Tombstone[] = []
   for (const r of records) {
     copies.push({ ...r, id: idGen(), movedFrom: r.id, supersedes: undefined })
-    tombstones.push({ id: idGen(), author: reattachedBy, createdAt: nowIso,
-      revokes: r.id, reason: 'moved', movedTo: newSourcePath })
+    tombstones.push({
+      id: idGen(),
+      author: reattachedBy,
+      createdAt: nowIso,
+      revokes: r.id,
+      reason: 'moved',
+      movedTo: newSourcePath,
+    })
   }
   return { copies, tombstones }
 }
@@ -3080,17 +3448,21 @@ reg2('vouch.reReview', async (recordId?: string) => {
   const resolved = currentResolved(ctx, rootDir, sourcePath, docText)
   const line = editor.selection.active.line + 1
   const target = recordId
-    ? resolved.find(e => e.record.id === recordId)
-    : resolved.find(e => e.record.author.email === author.email &&
-        e.res.status === 'dismissed' &&
-        (e.record.kind === 'file' || overlaps(e.res.effectiveRange, [line, line])))
+    ? resolved.find((e) => e.record.id === recordId)
+    : resolved.find(
+        (e) =>
+          e.record.author.email === author.email &&
+          e.res.status === 'dismissed' &&
+          (e.record.kind === 'file' || overlaps(e.res.effectiveRange, [line, line])),
+      )
   if (!target) {
     void vscode.window.showInformationMessage('Vouch: no dismissed review of yours here.')
     return
   }
 
   if (target.record.kind === 'file') {
-    await vscode.commands.executeCommand('vouch.file'); return
+    await vscode.commands.executeCommand('vouch.file')
+    return
   }
   if (target.record.symbol) {
     const symbols = await documentSymbols(editor.document.uri)
@@ -3098,7 +3470,8 @@ reg2('vouch.reReview', async (recordId?: string) => {
     if (node) {
       editor.selection = new vscode.Selection(node.range[0] - 1, 0, node.range[1] - 1, 0)
       await vscode.commands.executeCommand(
-        target.record.kind === 'class' ? 'vouch.class' : 'vouch.function')
+        target.record.kind === 'class' ? 'vouch.class' : 'vouch.function',
+      )
       return
     }
   }
@@ -3107,7 +3480,9 @@ reg2('vouch.reReview', async (recordId?: string) => {
   editor.selection = new vscode.Selection(s - 1, 0, e - 1, 0)
   editor.revealRange(new vscode.Range(s - 1, 0, e - 1, 0))
   const choice = await vscode.window.showInformationMessage(
-    'Vouch: confirm or adjust the selection, then re-review.', 'Re-review selection')
+    'Vouch: confirm or adjust the selection, then re-review.',
+    'Re-review selection',
+  )
   if (choice === 'Re-review selection') {
     await vscode.commands.executeCommand('vouch.selection')
   }
@@ -3115,25 +3490,34 @@ reg2('vouch.reReview', async (recordId?: string) => {
 
 reg('vouch.reattach', async () => {
   for (const root of ctx.roots) {
-    const orphans = root.store.orphans(p => fs.existsSync(path.join(root.rootDir, p)))
+    const orphans = root.store.orphans((p) => fs.existsSync(path.join(root.rootDir, p)))
     if (orphans.length === 0) continue
-    const oldPath = await vscode.window.showQuickPick(orphans,
-      { placeHolder: 'Vouch: orphaned reviews — pick the old path to re-attach' })
+    const oldPath = await vscode.window.showQuickPick(orphans, {
+      placeHolder: 'Vouch: orphaned reviews — pick the old path to re-attach',
+    })
     if (!oldPath) return
     const picked = await vscode.window.showOpenDialog({
-      canSelectMany: false, defaultUri: vscode.Uri.file(root.rootDir),
-      openLabel: 'Re-attach reviews to this file' })
+      canSelectMany: false,
+      defaultUri: vscode.Uri.file(root.rootDir),
+      openLabel: 'Re-attach reviews to this file',
+    })
     const newUri = picked?.[0]
     if (!newUri) return
     const newSourcePath = ctx.sourcePathOf(newUri)
     if (!newSourcePath) {
-      void vscode.window.showWarningMessage('Vouch: target must be inside the workspace.'); return
+      void vscode.window.showWarningMessage('Vouch: target must be inside the workspace.')
+      return
     }
     const author = await resolveAuthor(extCtx, root.rootDir)
     if (!author) return
     const state = root.store.stateFor(oldPath)!
     const { copies, tombstones } = buildReattachLines(
-      state.current, newSourcePath, () => randomUUID(), new Date().toISOString(), author)
+      state.current,
+      newSourcePath,
+      () => randomUUID(),
+      new Date().toISOString(),
+      author,
+    )
     for (const c of copies) {
       await appendLine(root.rootDir, newSourcePath, authorSlug(c.author.email), c)
     }
@@ -3167,11 +3551,13 @@ git commit -m "feat: re-review flow and append-only orphan re-attach"
 ### Task 16: Sidebar — coverage tree, stats, orphans, background queue
 
 **Files:**
+
 - Create: `src/core/treemodel.ts`, `src/vscode/sidebar.ts`
 - Modify: `src/vscode/extension.ts`
 - Test: `test/core/treemodel.test.ts`
 
 **Interfaces:**
+
 - Consumes: `FileCoverage`, `rollup`, `pct` (Task 9); store, pipeline.
 - Produces:
   - `src/core/treemodel.ts` (pure):
@@ -3196,23 +3582,25 @@ import { buildTree, headerStats, type TreeFile } from '../../src/core/treemodel'
 const FILES: TreeFile[] = [
   { path: 'src/a.ts', coverage: { reviewedLines: 5, totalLines: 10 } },
   { path: 'src/sub/b.ts', coverage: { reviewedLines: 10, totalLines: 10 } },
-  { path: 'src/c.ts', coverage: null },          // no records
+  { path: 'src/c.ts', coverage: null }, // no records
   { path: 'README.md', coverage: null },
 ]
 
 describe('buildTree', () => {
   it('nests folders and rolls up attested descendants only', () => {
     const root = buildTree(FILES)
-    const src = root.folders.find(f => f.name === 'src')!
-    expect(src.files.map(f => f.path).sort()).toEqual(['src/a.ts', 'src/c.ts'])
+    const src = root.folders.find((f) => f.name === 'src')!
+    expect(src.files.map((f) => f.path).sort()).toEqual(['src/a.ts', 'src/c.ts'])
     expect(src.folders[0]!.name).toBe('sub')
     expect(src.coverage).toEqual({ reviewedLines: 15, totalLines: 20 }) // c.ts excluded
-    expect(root.files.map(f => f.path)).toEqual(['README.md'])
+    expect(root.files.map((f) => f.path)).toEqual(['README.md'])
     expect(root.coverage).toEqual({ reviewedLines: 15, totalLines: 20 })
   })
   it('pending descendant → pending folder', () => {
-    const root = buildTree([{ path: 'src/a.ts', coverage: 'pending' },
-      { path: 'src/b.ts', coverage: { reviewedLines: 1, totalLines: 2 } }])
+    const root = buildTree([
+      { path: 'src/a.ts', coverage: 'pending' },
+      { path: 'src/b.ts', coverage: { reviewedLines: 1, totalLines: 2 } },
+    ])
     expect(root.folders[0]!.coverage).toBe('pending')
     expect(root.coverage).toBe('pending')
   })
@@ -3233,10 +3621,14 @@ describe('headerStats', () => {
     expect(h.perAuthor).toEqual([{ name: 'San', current: 3 }])
   })
   it('pending propagates; no attested files → null pct', () => {
-    expect(headerStats([{ path: 'a', coverage: 'pending' }], 1,
-      { records: 0, perAuthor: new Map() }).pending).toBe(true)
-    expect(headerStats([{ path: 'a', coverage: null }], 1,
-      { records: 0, perAuthor: new Map() }).workspacePct).toBeNull()
+    expect(
+      headerStats([{ path: 'a', coverage: 'pending' }], 1, { records: 0, perAuthor: new Map() })
+        .pending,
+    ).toBe(true)
+    expect(
+      headerStats([{ path: 'a', coverage: null }], 1, { records: 0, perAuthor: new Map() })
+        .workspacePct,
+    ).toBeNull()
   })
 })
 ```
@@ -3252,7 +3644,10 @@ Expected: FAIL — module not found.
 // src/core/treemodel.ts
 import { rollup, pct, type FileCoverage } from './coverage'
 
-export interface TreeFile { path: string; coverage: FileCoverage | null | 'pending' }
+export interface TreeFile {
+  path: string
+  coverage: FileCoverage | null | 'pending'
+}
 export interface TreeFolder {
   name: string
   path: string
@@ -3268,9 +3663,15 @@ export function buildTree(files: TreeFile[]): TreeFolder {
     let node = root
     for (let i = 0; i < segments.length - 1; i++) {
       const name = segments[i]!
-      let child = node.folders.find(x => x.name === name)
+      let child = node.folders.find((x) => x.name === name)
       if (!child) {
-        child = { name, path: segments.slice(0, i + 1).join('/'), folders: [], files: [], coverage: null }
+        child = {
+          name,
+          path: segments.slice(0, i + 1).join('/'),
+          folders: [],
+          files: [],
+          coverage: null,
+        }
         node.folders.push(child)
       }
       node = child
@@ -3307,19 +3708,20 @@ export interface HeaderStats {
 }
 
 export function headerStats(
-  files: TreeFile[], totalFiles: number,
+  files: TreeFile[],
+  totalFiles: number,
   counts: { records: number; perAuthor: Map<string, { name: string; current: number }> },
 ): HeaderStats {
-  const pending = files.some(f => f.coverage === 'pending')
+  const pending = files.some((f) => f.coverage === 'pending')
   const attestedCovs = files
-    .map(f => f.coverage)
+    .map((f) => f.coverage)
     .filter((c): c is FileCoverage => c !== null && c !== 'pending')
   const total = rollup(attestedCovs)
   return {
     workspacePct: total ? pct(total) : null,
     pending,
     records: counts.records,
-    attested: files.filter(f => f.coverage !== null).length,
+    attested: files.filter((f) => f.coverage !== null).length,
     totalFiles,
     perAuthor: [...counts.perAuthor.values()],
   }
@@ -3356,7 +3758,10 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
   private readonly emitter = new vscode.EventEmitter<Item | undefined>()
   readonly onDidChangeTreeData = this.emitter.event
 
-  private covCache = new Map<string, { mtimeMs: number; gen: number; coverage: FileCoverage | null }>()
+  private covCache = new Map<
+    string,
+    { mtimeMs: number; gen: number; coverage: FileCoverage | null }
+  >()
   private gen = 0
   private fileList = new Map<string, string[]>() // rootDir -> repo-relative paths
   private queue: { root: RootEntry; sourcePath: string }[] = []
@@ -3384,16 +3789,18 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
   private async findFallback(root: RootEntry): Promise<string[]> {
     const uris = await vscode.workspace.findFiles('**/*', '**/node_modules/**', 20_000)
     return uris
-      .filter(u => u.fsPath.startsWith(root.rootDir))
-      .map(u => path.relative(root.rootDir, u.fsPath).split(path.sep).join('/'))
+      .filter((u) => u.fsPath.startsWith(root.rootDir))
+      .map((u) => path.relative(root.rootDir, u.fsPath).split(path.sep).join('/'))
   }
 
   refresh(): void {
     this.gen++
-    this.queue = this.ctx.roots.flatMap(root =>
-      root.store.attestedFiles()
-        .filter(p => fs.existsSync(path.join(root.rootDir, p)))
-        .map(sourcePath => ({ root, sourcePath })))
+    this.queue = this.ctx.roots.flatMap((root) =>
+      root.store
+        .attestedFiles()
+        .filter((p) => fs.existsSync(path.join(root.rootDir, p)))
+        .map((sourcePath) => ({ root, sourcePath })),
+    )
     this.runQueue()
     this.emitter.fire(undefined)
   }
@@ -3403,7 +3810,11 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     this.queueRunning = true
     const tick = (): void => {
       const job = this.queue.shift()
-      if (!job) { this.queueRunning = false; this.emitter.fire(undefined); return }
+      if (!job) {
+        this.queueRunning = false
+        this.emitter.fire(undefined)
+        return
+      }
       const abs = path.join(job.root.rootDir, job.sourcePath)
       try {
         const stat = fs.statSync(abs)
@@ -3412,12 +3823,19 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
         if (!hit || hit.mtimeMs !== stat.mtimeMs || hit.gen !== this.gen) {
           const text = fs.readFileSync(abs, 'utf8')
           const state = job.root.store.stateFor(job.sourcePath)!
-          const entries = state.current.map(record => ({
-            record, res: resolveRecord(record, text) })) // text-only (spec §8)
+          const entries = state.current.map((record) => ({
+            record,
+            res: resolveRecord(record, text),
+          })) // text-only (spec §8)
           this.covCache.set(key, {
-            mtimeMs: stat.mtimeMs, gen: this.gen, coverage: fileCoverage(entries, text) })
+            mtimeMs: stat.mtimeMs,
+            gen: this.gen,
+            coverage: fileCoverage(entries, text),
+          })
         }
-      } catch { /* unreadable/binary → excluded */ }
+      } catch {
+        /* unreadable/binary → excluded */
+      }
       setTimeout(tick, 25)
     }
     tick()
@@ -3427,9 +3845,15 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     const attested = new Set(root.store.attestedFiles())
     const out: TreeFile[] = []
     for (const p of this.fileList.get(root.rootDir) ?? []) {
-      if (!attested.has(p)) { out.push({ path: p, coverage: null }); continue }
+      if (!attested.has(p)) {
+        out.push({ path: p, coverage: null })
+        continue
+      }
       const cached = this.covCache.get(path.join(root.rootDir, p))
-      out.push({ path: p, coverage: cached && cached.gen === this.gen ? cached.coverage : 'pending' })
+      out.push({
+        path: p,
+        coverage: cached && cached.gen === this.gen ? cached.coverage : 'pending',
+      })
     }
     return out
   }
@@ -3438,11 +3862,17 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     if (el.t === 'header') {
       const root = this.ctx.roots[0]
       const files = root ? this.treeFiles(root) : []
-      const h = headerStats(files, files.length, root?.store.counts() ?? { records: 0, perAuthor: new Map() })
+      const h = headerStats(
+        files,
+        files.length,
+        root?.store.counts() ?? { records: 0, perAuthor: new Map() },
+      )
       const item = new vscode.TreeItem('Coverage', vscode.TreeItemCollapsibleState.None)
-      item.description = h.pending ? '…'
-        : h.workspacePct === null ? 'no reviews yet'
-        : `${h.workspacePct}% of attested · ${h.attested}/${h.totalFiles} files · ${h.records} reviews`
+      item.description = h.pending
+        ? '…'
+        : h.workspacePct === null
+          ? 'no reviews yet'
+          : `${h.workspacePct}% of attested · ${h.attested}/${h.totalFiles} files · ${h.records} reviews`
       item.iconPath = new vscode.ThemeIcon('shield')
       return item
     }
@@ -3454,19 +3884,29 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
       return item
     }
     if (el.t === 'file') {
-      const item = new vscode.TreeItem(path.basename(el.file.path), vscode.TreeItemCollapsibleState.None)
+      const item = new vscode.TreeItem(
+        path.basename(el.file.path),
+        vscode.TreeItemCollapsibleState.None,
+      )
       const c = el.file.coverage
       if (c === 'pending') item.description = '…'
       else if (c) {
         const p = pct(c)
         item.description = `${p}%`
-        item.iconPath = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor(
-          p === 100 ? 'charts.green' : p > 0 ? 'charts.yellow' : 'charts.red'))
+        item.iconPath = new vscode.ThemeIcon(
+          'circle-filled',
+          new vscode.ThemeColor(
+            p === 100 ? 'charts.green' : p > 0 ? 'charts.yellow' : 'charts.red',
+          ),
+        )
       } else {
         item.iconPath = new vscode.ThemeIcon('circle-outline')
       }
-      item.command = { command: 'vscode.open', title: 'Open',
-        arguments: [vscode.Uri.file(path.join(el.root.rootDir, el.file.path))] }
+      item.command = {
+        command: 'vscode.open',
+        title: 'Open',
+        arguments: [vscode.Uri.file(path.join(el.root.rootDir, el.file.path))],
+      }
       return item
     }
     if (el.t === 'orphanRoot') {
@@ -3484,24 +3924,27 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
       const out: Item[] = [{ t: 'header' }]
       for (const root of this.ctx.roots) {
         const tree = buildTree(this.treeFiles(root))
-        out.push(...tree.folders.map(node => ({ t: 'folder' as const, root, node })))
-        out.push(...tree.files.map(file => ({ t: 'file' as const, root, file })))
+        out.push(...tree.folders.map((node) => ({ t: 'folder' as const, root, node })))
+        out.push(...tree.files.map((file) => ({ t: 'file' as const, root, file })))
       }
-      const orphans = this.ctx.roots.flatMap(r =>
-        r.store.orphans(p => fs.existsSync(path.join(r.rootDir, p))))
+      const orphans = this.ctx.roots.flatMap((r) =>
+        r.store.orphans((p) => fs.existsSync(path.join(r.rootDir, p))),
+      )
       if (orphans.length > 0) out.push({ t: 'orphanRoot' })
       return out
     }
     if (el.t === 'folder') {
       return [
-        ...el.node.folders.map(node => ({ t: 'folder' as const, root: el.root, node })),
-        ...el.node.files.map(file => ({ t: 'file' as const, root: el.root, file })),
+        ...el.node.folders.map((node) => ({ t: 'folder' as const, root: el.root, node })),
+        ...el.node.files.map((file) => ({ t: 'file' as const, root: el.root, file })),
       ]
     }
     if (el.t === 'orphanRoot') {
-      return this.ctx.roots.flatMap(r =>
-        r.store.orphans(p => fs.existsSync(path.join(r.rootDir, p)))
-          .map(p => ({ t: 'orphan' as const, path: p })))
+      return this.ctx.roots.flatMap((r) =>
+        r.store
+          .orphans((p) => fs.existsSync(path.join(r.rootDir, p)))
+          .map((p) => ({ t: 'orphan' as const, path: p })),
+      )
     }
     return []
   }
@@ -3524,7 +3967,7 @@ Multi-root note: the header item currently reads the first root (single-root cov
 describe('sidebar', () => {
   it('tree provider returns header + fixture tree', async () => {
     // Allow the background queue a moment
-    await new Promise(r => setTimeout(r, 500))
+    await new Promise((r) => setTimeout(r, 500))
     const items = await vscode.commands.executeCommand<unknown>('workbench.view.extension.vouch')
     // The command just focuses the view; real assertion is via the test api:
     const api = (await vscode.extensions.getExtension('sanzhar.vouch')!.activate()).getTestApi()
@@ -3552,11 +3995,13 @@ git commit -m "feat: coverage sidebar with attested-only rollups and background 
 ### Task 17: Timeline webview panel
 
 **Files:**
+
 - Create: `src/core/timelinehtml.ts`, `src/vscode/panel.ts`
 - Modify: `src/vscode/commands.ts` (register `vouch.openTimeline`), `package.json` (add command declaration `{ "command": "vouch.openTimeline", "title": "Vouch: Open review timeline" }`)
 - Test: `test/core/timelinehtml.test.ts`
 
 **Interfaces:**
+
 - Consumes: `ChainState`, `Resolution`, `relTime` (Tasks 3, 8, 13).
 - Produces:
   - `src/core/timelinehtml.ts` (pure):
@@ -3574,30 +4019,61 @@ import { timelineHtml, escapeHtml } from '../../src/core/timelinehtml'
 const INPUT = {
   sourcePath: 'src/a.ts',
   nowIso: '2026-07-13T12:00:00Z',
-  users: [{
-    name: 'San <script>', email: 's@x.com',
-    chains: [{
-      revoked: false,
-      entries: [
-        { recordId: 'r2', status: 'reviewed' as const, createdAt: '2026-07-12T12:00:00Z',
-          commit: 'abc1234def', commitLink: 'https://x/commit/abc1234def',
-          comment: 'v2 <b>bold</b>', kind: 'function', symbol: 'f' },
-        { recordId: 'r1', status: 'historical' as const, createdAt: '2026-07-10T12:00:00Z',
-          commit: '', commitLink: null, kind: 'selection', range: [1, 3] as [number, number] },
+  users: [
+    {
+      name: 'San <script>',
+      email: 's@x.com',
+      chains: [
+        {
+          revoked: false,
+          entries: [
+            {
+              recordId: 'r2',
+              status: 'reviewed' as const,
+              createdAt: '2026-07-12T12:00:00Z',
+              commit: 'abc1234def',
+              commitLink: 'https://x/commit/abc1234def',
+              comment: 'v2 <b>bold</b>',
+              kind: 'function',
+              symbol: 'f',
+            },
+            {
+              recordId: 'r1',
+              status: 'historical' as const,
+              createdAt: '2026-07-10T12:00:00Z',
+              commit: '',
+              commitLink: null,
+              kind: 'selection',
+              range: [1, 3] as [number, number],
+            },
+          ],
+        },
+        {
+          revoked: true,
+          entries: [
+            {
+              recordId: 'r0',
+              status: 'historical' as const,
+              createdAt: '2026-07-01T12:00:00Z',
+              commit: '',
+              commitLink: null,
+              kind: 'selection',
+            },
+          ],
+        },
       ],
-    }, { revoked: true, entries: [{ recordId: 'r0', status: 'historical' as const,
-      createdAt: '2026-07-01T12:00:00Z', commit: '', commitLink: null, kind: 'selection' }] }],
-  }],
+    },
+  ],
 }
 
 describe('timelineHtml', () => {
   it('escapes user content and renders tabs, chains, revoked details', () => {
     const html = timelineHtml(INPUT, 'vscode-resource:', 'NONCE')
-    expect(html).not.toContain('<script>')          // raw user input never passes through
+    expect(html).not.toContain('<script>') // raw user input never passes through
     expect(html).toContain('San &lt;script&gt;')
     expect(html).toContain('v2 &lt;b&gt;bold&lt;/b&gt;')
-    expect(html).toContain('abc1234')                // short sha
-    expect(html).toContain('<details>')              // revoked chain
+    expect(html).toContain('abc1234') // short sha
+    expect(html).toContain('<details>') // revoked chain
     expect(html).toContain('nonce="NONCE"')
     expect(html).toContain("default-src 'none'")
   })
@@ -3619,8 +4095,12 @@ Expected: FAIL — module not found.
 import { relTime } from './hovermd'
 
 export function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 export interface TimelineEntry {
@@ -3637,39 +4117,54 @@ export interface TimelineEntry {
 export interface TimelineInput {
   sourcePath: string
   nowIso: string
-  users: { name: string; email: string
-    chains: { entries: TimelineEntry[]; revoked: boolean }[] }[]
+  users: { name: string; email: string; chains: { entries: TimelineEntry[]; revoked: boolean }[] }[]
 }
 
 const GLYPH = { reviewed: '✓', dismissed: '⚠', historical: '·' } as const
 
 function entryHtml(e: TimelineEntry, nowIso: string): string {
   const sha = e.commit ? e.commit.slice(0, 7) : ''
-  const shaHtml = !sha ? '' : e.commitLink
-    ? ` <a href="${escapeHtml(e.commitLink)}"><code>${escapeHtml(sha)}</code></a>`
-    : ` <code>${escapeHtml(sha)}</code>`
-  const what = e.symbol ? `${e.kind} ${e.symbol}`
-    : e.range ? `${e.kind} L${e.range[0]}–${e.range[1]}` : e.kind
+  const shaHtml = !sha
+    ? ''
+    : e.commitLink
+      ? ` <a href="${escapeHtml(e.commitLink)}"><code>${escapeHtml(sha)}</code></a>`
+      : ` <code>${escapeHtml(sha)}</code>`
+  const what = e.symbol
+    ? `${e.kind} ${e.symbol}`
+    : e.range
+      ? `${e.kind} L${e.range[0]}–${e.range[1]}`
+      : e.kind
   const comment = e.comment ? `<blockquote>${escapeHtml(e.comment)}</blockquote>` : ''
-  const actions = e.status === 'dismissed'
-    ? ` <button data-cmd="reReview" data-id="${escapeHtml(e.recordId)}">Re-review</button>` : ''
-  const diffBtn = e.status !== 'historical'
-    ? ` <button data-cmd="showDiff" data-id="${escapeHtml(e.recordId)}">Diff</button>` : ''
-  return `<li class="${e.status}"><span class="glyph">${GLYPH[e.status]}</span> ` +
+  const actions =
+    e.status === 'dismissed'
+      ? ` <button data-cmd="reReview" data-id="${escapeHtml(e.recordId)}">Re-review</button>`
+      : ''
+  const diffBtn =
+    e.status !== 'historical'
+      ? ` <button data-cmd="showDiff" data-id="${escapeHtml(e.recordId)}">Diff</button>`
+      : ''
+  return (
+    `<li class="${e.status}"><span class="glyph">${GLYPH[e.status]}</span> ` +
     `<strong>${e.status}</strong> — ${escapeHtml(what)}, ${relTime(e.createdAt, nowIso)}` +
     `${shaHtml}${actions}${diffBtn}${comment}</li>`
+  )
 }
 
 export function timelineHtml(input: TimelineInput, cspSource: string, nonce: string): string {
-  const tabs = input.users.map((u, i) =>
-    `<button class="tab" data-tab="${i}">${escapeHtml(u.name)}</button>`).join('')
-  const panes = input.users.map((u, i) => {
-    const chains = u.chains.map(c => {
-      const list = `<ul>${c.entries.map(e => entryHtml(e, input.nowIso)).join('')}</ul>`
-      return c.revoked ? `<details><summary>revoked chain</summary>${list}</details>` : list
-    }).join('')
-    return `<section class="pane" data-pane="${i}">${chains}</section>`
-  }).join('')
+  const tabs = input.users
+    .map((u, i) => `<button class="tab" data-tab="${i}">${escapeHtml(u.name)}</button>`)
+    .join('')
+  const panes = input.users
+    .map((u, i) => {
+      const chains = u.chains
+        .map((c) => {
+          const list = `<ul>${c.entries.map((e) => entryHtml(e, input.nowIso)).join('')}</ul>`
+          return c.revoked ? `<details><summary>revoked chain</summary>${list}</details>` : list
+        })
+        .join('')
+      return `<section class="pane" data-pane="${i}">${chains}</section>`
+    })
+    .join('')
   return `<!DOCTYPE html><html><head>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' ${cspSource}; script-src 'nonce-${nonce}'">
 <style>
@@ -3717,25 +4212,32 @@ import { remoteUrl } from './gitinfo'
 
 export async function openTimeline(ctx: VouchContext, recordId: string): Promise<void> {
   const found = findRecord(ctx, recordId)
-  if (!found) { void vscode.window.showWarningMessage('Vouch: record not found.'); return }
+  if (!found) {
+    void vscode.window.showWarningMessage('Vouch: record not found.')
+    return
+  }
   const { rootDir, sourcePath } = found
-  const root = ctx.roots.find(r => r.rootDir === rootDir)!
+  const root = ctx.roots.find((r) => r.rootDir === rootDir)!
   const state = root.store.stateFor(sourcePath)!
   const remote = await remoteUrl(rootDir)
 
   let docText = ''
-  try { docText = fs.readFileSync(path.join(rootDir, sourcePath), 'utf8') } catch { /* gone */ }
+  try {
+    docText = fs.readFileSync(path.join(rootDir, sourcePath), 'utf8')
+  } catch {
+    /* gone */
+  }
 
-  const currentIds = new Set(state.current.map(r => r.id))
+  const currentIds = new Set(state.current.map((r) => r.id))
   const byUser = new Map<string, TimelineInput['users'][number]>()
   for (const [rootId, members] of state.chains) {
     const first = members[0]!
     const key = first.author.email
     if (!byUser.has(key)) byUser.set(key, { name: first.author.name, email: key, chains: [] })
-    const entries: TimelineEntry[] = [...members].reverse().map(m => ({
+    const entries: TimelineEntry[] = [...members].reverse().map((m) => ({
       recordId: m.id,
-      status: currentIds.has(m.id) && docText !== ''
-        ? resolveRecord(m, docText).status : 'historical',
+      status:
+        currentIds.has(m.id) && docText !== '' ? resolveRecord(m, docText).status : 'historical',
       createdAt: m.createdAt,
       commit: m.commit,
       commitLink: m.commit && remote ? commitUrl(remote, m.commit) : null,
@@ -3747,10 +4249,17 @@ export async function openTimeline(ctx: VouchContext, recordId: string): Promise
     byUser.get(key)!.chains.push({ entries, revoked: state.revokedChains.has(rootId) })
   }
 
-  const panel = vscode.window.createWebviewPanel('vouchTimeline',
-    `Vouch: ${sourcePath}`, vscode.ViewColumn.Beside, { enableScripts: true })
+  const panel = vscode.window.createWebviewPanel(
+    'vouchTimeline',
+    `Vouch: ${sourcePath}`,
+    vscode.ViewColumn.Beside,
+    { enableScripts: true },
+  )
   const input: TimelineInput = {
-    sourcePath, nowIso: new Date().toISOString(), users: [...byUser.values()] }
+    sourcePath,
+    nowIso: new Date().toISOString(),
+    users: [...byUser.values()],
+  }
   panel.webview.html = timelineHtml(input, panel.webview.cspSource, randomUUID())
   panel.webview.onDidReceiveMessage((msg: { cmd: string; recordId: string }) => {
     if (msg.cmd === 'reReview') void vscode.commands.executeCommand('vouch.reReview', msg.recordId)
@@ -3779,10 +4288,12 @@ git commit -m "feat: per-user timeline webview with revoked-chain disclosure"
 ### Task 18: Packaging, README, manual end-to-end verification
 
 **Files:**
+
 - Create: `README.md`, `LICENSE` (MIT)
 - Modify: `package.json` if packaging surfaces issues
 
 **Interfaces:**
+
 - Consumes: everything.
 - Produces: installable `vouch-0.0.1.vsix`.
 
@@ -3804,6 +4315,7 @@ Expected: `vouch-0.0.1.vsix` produced without warnings that block packaging (vsc
 Run: `code --install-extension vouch-0.0.1.vsix` then open a scratch git repo.
 
 Checklist (each item must visibly work):
+
 1. `Vouch: Initialize` → `.vouch/config.json` + `.gitattributes` line exist.
 2. Select lines → `Vouch: Review selected lines` with a comment → green ✓ gutter icon on first line.
 3. Hover the range → status line, comment, sha link, three command links render.
@@ -3832,21 +4344,20 @@ git commit -m "chore: README, license, vsix packaging"
 
 ## Spec coverage map (self-review)
 
-| Spec section | Tasks |
-|---|---|
-| §3 data model | 2, 3 |
-| §4 storage/shards/init/revocation | 3, 4, 5 |
-| §5 anchor identity/auto-supersede | 3 (chains), 11 (auto-supersede) |
-| §5 resolution (symbol step, two-stage scan, huge files) | 7, 8, 10 (shape detection), 12 |
-| §6 architecture | all (structure mirrors it) |
-| §7 gutter | 12 |
-| §7 range hover / re-review / call-site hover | 13, 15 |
-| §7 sidebar / orphans / re-attach | 15, 16 |
-| §7 diff since review (verified baseline) | 14 |
-| §8 coverage + background queue | 9, 16 |
-| §9 multi-root, no-repo, flat symbols, corrupt JSONL, huge files, CRLF | 4, 5, 6, 8, 10, 11 |
-| §10 testing | every task (TDD) + integration suite |
-| §12 commands | 1 (manifest), 11, 14, 15, 17 |
+| Spec section                                                          | Tasks                                |
+| --------------------------------------------------------------------- | ------------------------------------ |
+| §3 data model                                                         | 2, 3                                 |
+| §4 storage/shards/init/revocation                                     | 3, 4, 5                              |
+| §5 anchor identity/auto-supersede                                     | 3 (chains), 11 (auto-supersede)      |
+| §5 resolution (symbol step, two-stage scan, huge files)               | 7, 8, 10 (shape detection), 12       |
+| §6 architecture                                                       | all (structure mirrors it)           |
+| §7 gutter                                                             | 12                                   |
+| §7 range hover / re-review / call-site hover                          | 13, 15                               |
+| §7 sidebar / orphans / re-attach                                      | 15, 16                               |
+| §7 diff since review (verified baseline)                              | 14                                   |
+| §8 coverage + background queue                                        | 9, 16                                |
+| §9 multi-root, no-repo, flat symbols, corrupt JSONL, huge files, CRLF | 4, 5, 6, 8, 10, 11                   |
+| §10 testing                                                           | every task (TDD) + integration suite |
+| §12 commands                                                          | 1 (manifest), 11, 14, 15, 17         |
 
 Known deliberate v1 simplifications (match spec non-goals): no inline call-site decorations; manual re-attach; sidebar header reads first root primarily (multi-root trees still render); re-attach copies **current** records only — historical chain members stay (revoked) in the old path's shards, reachable via `movedFrom` + the old path's timeline rather than replayed under the new path.
-

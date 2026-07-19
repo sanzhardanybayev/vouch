@@ -19,6 +19,9 @@
 // Already-counted, not-reviewed, not-attested files are the only ones left
 // alone — the count doesn't depend on the record set, so there's nothing to
 // invalidate for them.
-export function shouldRequeue(attested: boolean, cached: { reviewed: boolean } | undefined): boolean {
+export function shouldRequeue(
+  attested: boolean,
+  cached: { reviewed: boolean } | undefined,
+): boolean {
   return attested || !cached || cached.reviewed
 }

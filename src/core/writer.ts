@@ -4,7 +4,10 @@ import { shardPath } from './paths'
 import type { VouchLine } from './types'
 
 export async function appendLine(
-  rootDir: string, sourcePath: string, slug: string, line: VouchLine,
+  rootDir: string,
+  sourcePath: string,
+  slug: string,
+  line: VouchLine,
 ): Promise<void> {
   const abs = join(rootDir, shardPath(sourcePath, slug))
   await mkdir(dirname(abs), { recursive: true })
@@ -23,10 +26,14 @@ export async function initVouch(rootDir: string): Promise<void> {
   }
   const attrPath = join(rootDir, '.gitattributes')
   let attrs = ''
-  try { attrs = await readFile(attrPath, 'utf8') } catch { /* absent */ }
+  try {
+    attrs = await readFile(attrPath, 'utf8')
+  } catch {
+    /* absent */
+  }
   // Split on \r?\n and trim: a CRLF .gitattributes must not accrete a
   // duplicate line on every init.
-  if (!attrs.split(/\r?\n/).some(l => l.trim() === ATTR_LINE)) {
+  if (!attrs.split(/\r?\n/).some((l) => l.trim() === ATTR_LINE)) {
     const sep = attrs === '' || attrs.endsWith('\n') ? '' : '\n'
     await writeFile(attrPath, attrs + sep + ATTR_LINE + '\n', 'utf8')
   }

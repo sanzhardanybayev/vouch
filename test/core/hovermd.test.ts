@@ -19,11 +19,20 @@ describe('relTime', () => {
 
 describe('rangeHoverMd', () => {
   it('renders status, author, time, short sha, comment, command links', () => {
-    const md = rangeHoverMd([{
-      authorName: 'San', status: 'reviewed', createdAt: '2026-07-11T12:00:00Z',
-      comment: 'checked errors', commit: 'abc1234def5678', commitLink: 'https://x/commit/abc1234def5678',
-      recordId: 'r1',
-    }], NOW)
+    const md = rangeHoverMd(
+      [
+        {
+          authorName: 'San',
+          status: 'reviewed',
+          createdAt: '2026-07-11T12:00:00Z',
+          comment: 'checked errors',
+          commit: 'abc1234def5678',
+          commitLink: 'https://x/commit/abc1234def5678',
+          recordId: 'r1',
+        },
+      ],
+      NOW,
+    )
     expect(md).toContain('✓ reviewed')
     expect(md).toContain('San')
     expect(md).toContain('2d ago')
@@ -34,23 +43,58 @@ describe('rangeHoverMd', () => {
     expect(md).toContain('command:vouch.openTimeline?')
   })
   it('dismissed uses warning glyph and label', () => {
-    const md = rangeHoverMd([{ authorName: 'San', status: 'dismissed',
-      createdAt: NOW, commit: '', commitLink: null, recordId: 'r1' }], NOW)
+    const md = rangeHoverMd(
+      [
+        {
+          authorName: 'San',
+          status: 'dismissed',
+          createdAt: NOW,
+          commit: '',
+          commitLink: null,
+          recordId: 'r1',
+        },
+      ],
+      NOW,
+    )
     expect(md).toContain('⚠ dismissed (changed since review)')
     expect(md).not.toContain('](null')
   })
 
   it('ambiguous gets its own label and a Resolve command link', () => {
-    const md = rangeHoverMd([{ authorName: 'San', status: 'ambiguous',
-      createdAt: NOW, commit: '', commitLink: null, recordId: 'r1' }], NOW)
+    const md = rangeHoverMd(
+      [
+        {
+          authorName: 'San',
+          status: 'ambiguous',
+          createdAt: NOW,
+          commit: '',
+          commitLink: null,
+          recordId: 'r1',
+        },
+      ],
+      NOW,
+    )
     expect(md).toContain('? ambiguous (location cannot be verified)')
-    expect(md).toContain(`command:vouch.resolveAmbiguous?${encodeURIComponent(JSON.stringify(['r1']))}`)
+    expect(md).toContain(
+      `command:vouch.resolveAmbiguous?${encodeURIComponent(JSON.stringify(['r1']))}`,
+    )
   })
 
   it('reviewed and dismissed entries never carry a Resolve link', () => {
     for (const status of ['reviewed', 'dismissed'] as const) {
-      const md = rangeHoverMd([{ authorName: 'San', status,
-        createdAt: NOW, commit: '', commitLink: null, recordId: 'r1' }], NOW)
+      const md = rangeHoverMd(
+        [
+          {
+            authorName: 'San',
+            status,
+            createdAt: NOW,
+            commit: '',
+            commitLink: null,
+            recordId: 'r1',
+          },
+        ],
+        NOW,
+      )
       expect(md).not.toContain('vouch.resolveAmbiguous')
     }
   })
@@ -58,8 +102,12 @@ describe('rangeHoverMd', () => {
 
 describe('rangeHoverMd - supersedes count', () => {
   const base = {
-    authorName: 'San', status: 'reviewed' as const, createdAt: NOW,
-    commit: '', commitLink: null, recordId: 'r1',
+    authorName: 'San',
+    status: 'reviewed' as const,
+    createdAt: NOW,
+    commit: '',
+    commitLink: null,
+    recordId: 'r1',
   }
 
   it('renders nothing when supersedesCount is absent or 0', () => {
@@ -74,8 +122,9 @@ describe('rangeHoverMd - supersedes count', () => {
   })
 
   it('renders plural for 3', () => {
-    expect(rangeHoverMd([{ ...base, supersedesCount: 3 }], NOW))
-      .toContain('supersedes 3 earlier reviews')
+    expect(rangeHoverMd([{ ...base, supersedesCount: 3 }], NOW)).toContain(
+      'supersedes 3 earlier reviews',
+    )
   })
 
   it('is plain text placed before the action links, never a link itself', () => {
@@ -88,18 +137,22 @@ describe('rangeHoverMd - supersedes count', () => {
 
 describe('callSiteMd', () => {
   it('one line per author', () => {
-    const md = callSiteMd([
-      { authorName: 'San', status: 'reviewed', createdAt: '2026-07-11T12:00:00Z' },
-      { authorName: 'Bob', status: 'dismissed', createdAt: NOW },
-    ], NOW)
+    const md = callSiteMd(
+      [
+        { authorName: 'San', status: 'reviewed', createdAt: '2026-07-11T12:00:00Z' },
+        { authorName: 'Bob', status: 'dismissed', createdAt: NOW },
+      ],
+      NOW,
+    )
     expect(md).toContain('Vouch: ✓ reviewed — San, 2d ago')
     expect(md).toContain('Vouch: ⚠ dismissed (changed since review) — Bob')
   })
 
   it('escapes a malicious authorName so brackets cannot form a link', () => {
-    const md = callSiteMd([
-      { authorName: '[x](command:evil.cmd)', status: 'reviewed', createdAt: NOW },
-    ], NOW)
+    const md = callSiteMd(
+      [{ authorName: '[x](command:evil.cmd)', status: 'reviewed', createdAt: NOW }],
+      NOW,
+    )
     expect(md).not.toContain('[x](command:evil.cmd)')
     expect(md).toContain(escapeMd('[x](command:evil.cmd)'))
   })
@@ -118,31 +171,60 @@ describe('escapeMd', () => {
 
 describe('rangeHoverMd — injection safety', () => {
   it('a malicious comment with a command link cannot survive as a clickable link', () => {
-    const md = rangeHoverMd([{
-      authorName: 'San', status: 'reviewed', createdAt: NOW,
-      comment: '[see details](command:workbench.action.terminal.sendSequence?evil)',
-      commit: '', commitLink: null, recordId: 'r1',
-    }], NOW)
+    const md = rangeHoverMd(
+      [
+        {
+          authorName: 'San',
+          status: 'reviewed',
+          createdAt: NOW,
+          comment: '[see details](command:workbench.action.terminal.sendSequence?evil)',
+          commit: '',
+          commitLink: null,
+          recordId: 'r1',
+        },
+      ],
+      NOW,
+    )
     expect(md).not.toContain('](command:workbench')
     expect(md).not.toContain('](command:evil')
-    expect(md).toContain(escapeMd('[see details](command:workbench.action.terminal.sendSequence?evil)'))
+    expect(md).toContain(
+      escapeMd('[see details](command:workbench.action.terminal.sendSequence?evil)'),
+    )
   })
 
   it('escapes brackets in a malicious authorName', () => {
-    const md = rangeHoverMd([{
-      authorName: '[click me](command:evil.cmd)', status: 'reviewed', createdAt: NOW,
-      commit: '', commitLink: null, recordId: 'r1',
-    }], NOW)
+    const md = rangeHoverMd(
+      [
+        {
+          authorName: '[click me](command:evil.cmd)',
+          status: 'reviewed',
+          createdAt: NOW,
+          commit: '',
+          commitLink: null,
+          recordId: 'r1',
+        },
+      ],
+      NOW,
+    )
     expect(md).not.toContain('](command:evil')
     expect(md).toContain(escapeMd('[click me](command:evil.cmd)'))
   })
 
   it('blockquotes every line of a multi-line comment so it cannot escape the quote', () => {
-    const md = rangeHoverMd([{
-      authorName: 'San', status: 'reviewed', createdAt: NOW,
-      comment: 'line one\nline two\r\nline three',
-      commit: '', commitLink: null, recordId: 'r1',
-    }], NOW)
+    const md = rangeHoverMd(
+      [
+        {
+          authorName: 'San',
+          status: 'reviewed',
+          createdAt: NOW,
+          comment: 'line one\nline two\r\nline three',
+          commit: '',
+          commitLink: null,
+          recordId: 'r1',
+        },
+      ],
+      NOW,
+    )
     expect(md).toContain('> line one')
     expect(md).toContain('> line two')
     expect(md).toContain('> line three')
@@ -151,12 +233,19 @@ describe('rangeHoverMd — injection safety', () => {
   })
 
   it('a malicious commit forging a second command link is rejected outright (no sha, no link)', () => {
-    const md = rangeHoverMd([{
-      authorName: 'San', status: 'reviewed', createdAt: NOW,
-      commit: 'abc1234)[PWNED](command:vouch.reReview?x',
-      commitLink: 'command:vouch.reReview?%5B%22attacker-arg%22%5D',
-      recordId: 'r1',
-    }], NOW)
+    const md = rangeHoverMd(
+      [
+        {
+          authorName: 'San',
+          status: 'reviewed',
+          createdAt: NOW,
+          commit: 'abc1234)[PWNED](command:vouch.reReview?x',
+          commitLink: 'command:vouch.reReview?%5B%22attacker-arg%22%5D',
+          recordId: 'r1',
+        },
+      ],
+      NOW,
+    )
     // Only the three legitimate action links should produce `](command:` —
     // a forged commit must not add a fourth.
     const commandLinkCount = (md.match(/\]\(command:/g) ?? []).length
@@ -169,33 +258,69 @@ describe('rangeHoverMd — injection safety', () => {
 describe('rangeHoverMd — commit sha validation', () => {
   it('renders the linked short sha for a valid 40-hex commit', () => {
     const commit = 'a'.repeat(40)
-    const md = rangeHoverMd([{
-      authorName: 'San', status: 'reviewed', createdAt: NOW,
-      commit, commitLink: `https://x/commit/${commit}`, recordId: 'r1',
-    }], NOW)
+    const md = rangeHoverMd(
+      [
+        {
+          authorName: 'San',
+          status: 'reviewed',
+          createdAt: NOW,
+          commit,
+          commitLink: `https://x/commit/${commit}`,
+          recordId: 'r1',
+        },
+      ],
+      NOW,
+    )
     expect(md).toContain(`[\`${commit.slice(0, 7)}\`](https://x/commit/${commit})`)
   })
 
   it('renders the linked short sha for a valid 7-hex commit', () => {
-    const md = rangeHoverMd([{
-      authorName: 'San', status: 'reviewed', createdAt: NOW,
-      commit: 'abc1234', commitLink: 'https://x/commit/abc1234', recordId: 'r1',
-    }], NOW)
+    const md = rangeHoverMd(
+      [
+        {
+          authorName: 'San',
+          status: 'reviewed',
+          createdAt: NOW,
+          commit: 'abc1234',
+          commitLink: 'https://x/commit/abc1234',
+          recordId: 'r1',
+        },
+      ],
+      NOW,
+    )
     expect(md).toContain('[`abc1234`](https://x/commit/abc1234)')
   })
 
   it('does not render a non-https commitLink as a clickable sha link (command:/javascript:)', () => {
-    const commandMd = rangeHoverMd([{
-      authorName: 'San', status: 'reviewed', createdAt: NOW,
-      commit: 'abc1234def5678', commitLink: 'command:vouch.reReview?x', recordId: 'r1',
-    }], NOW)
+    const commandMd = rangeHoverMd(
+      [
+        {
+          authorName: 'San',
+          status: 'reviewed',
+          createdAt: NOW,
+          commit: 'abc1234def5678',
+          commitLink: 'command:vouch.reReview?x',
+          recordId: 'r1',
+        },
+      ],
+      NOW,
+    )
     expect(commandMd).not.toContain('](command:vouch.reReview?x')
     expect(commandMd).toContain('(`abc1234`)')
 
-    const jsMd = rangeHoverMd([{
-      authorName: 'San', status: 'reviewed', createdAt: NOW,
-      commit: 'abc1234def5678', commitLink: 'javascript:alert(1)', recordId: 'r1',
-    }], NOW)
+    const jsMd = rangeHoverMd(
+      [
+        {
+          authorName: 'San',
+          status: 'reviewed',
+          createdAt: NOW,
+          commit: 'abc1234def5678',
+          commitLink: 'javascript:alert(1)',
+          recordId: 'r1',
+        },
+      ],
+      NOW,
+    )
     expect(jsMd).not.toContain('](javascript:')
     expect(jsMd).toContain('(`abc1234`)')
   })
