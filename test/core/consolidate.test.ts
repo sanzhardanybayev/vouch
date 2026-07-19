@@ -14,8 +14,13 @@ function candidate(opts: {
   status?: Status
 }): { record: ReviewRecord; res: Resolution } {
   const record: ReviewRecord = {
-    id: opts.id, author: AUTHOR, createdAt: '2026-01-01T00:00:00Z', commit: 'c1',
-    dirty: false, kind: opts.kind ?? 'selection', hash: 'sha256:x',
+    id: opts.id,
+    author: AUTHOR,
+    createdAt: '2026-01-01T00:00:00Z',
+    commit: 'c1',
+    dirty: false,
+    kind: opts.kind ?? 'selection',
+    hash: 'sha256:x',
   }
   if (opts.symbol) record.symbol = opts.symbol
   if (opts.range) record.range = opts.range
@@ -29,7 +34,12 @@ function candidate(opts: {
 
 describe('summarizeCandidates', () => {
   it('empty input yields zeros', () => {
-    expect(summarizeCandidates([])).toEqual({ total: 0, dismissed: 0, ambiguous: 0, withComments: 0 })
+    expect(summarizeCandidates([])).toEqual({
+      total: 0,
+      dismissed: 0,
+      ambiguous: 0,
+      withComments: 0,
+    })
   })
 
   it('counts totals, dismissed, ambiguous, and commented candidates', () => {
@@ -39,7 +49,12 @@ describe('summarizeCandidates', () => {
       candidate({ id: 'c', range: [5, 6], status: 'dismissed', comment: 'stale' }),
       candidate({ id: 'd', range: [7, 8], status: 'ambiguous' }),
     ]
-    expect(summarizeCandidates(cands)).toEqual({ total: 4, dismissed: 2, ambiguous: 1, withComments: 2 })
+    expect(summarizeCandidates(cands)).toEqual({
+      total: 4,
+      dismissed: 2,
+      ambiguous: 1,
+      withComments: 2,
+    })
   })
 })
 
@@ -58,16 +73,19 @@ describe('prefillComment', () => {
 
   it('uses the last symbol segment with the stored range', () => {
     const cands = [
-      candidate({ id: 'a', kind: 'function', symbol: 'AuthService/login',
-        range: [5, 8], comment: 'auth ok' }),
+      candidate({
+        id: 'a',
+        kind: 'function',
+        symbol: 'AuthService/login',
+        range: [5, 8],
+        comment: 'auth ok',
+      }),
     ]
     expect(prefillComment(cands)).toBe('> login (was L5-8): auth ok')
   })
 
   it('uses file label for kind=file records without a range', () => {
-    const cands = [
-      candidate({ id: 'a', kind: 'file', comment: 'whole file fine' }),
-    ]
+    const cands = [candidate({ id: 'a', kind: 'file', comment: 'whole file fine' })]
     expect(prefillComment(cands)).toBe('> file: whole file fine')
   })
 
@@ -78,7 +96,8 @@ describe('prefillComment', () => {
       candidate({ id: 'a', kind: 'function', symbol: 'Svc/run', range: [1, 3], comment: 'first' }),
     ]
     expect(prefillComment(cands)).toBe(
-      '> file: file note | > run (was L1-3): first | > L4-6: second')
+      '> file: file note | > run (was L1-3): first | > L4-6: second',
+    )
   })
 
   it('collapses newlines and runs of whitespace in comments to single spaces', () => {

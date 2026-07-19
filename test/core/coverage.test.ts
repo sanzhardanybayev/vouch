@@ -4,8 +4,11 @@ import type { ReviewRecord } from '../../src/core/types'
 import type { Resolution } from '../../src/core/anchor'
 
 const DOC = 'a\nb\nc\nd\ne\nf\ng\nh\ni\nj' // 10 lines
-function entry(range: [number, number], status: 'reviewed' | 'dismissed' = 'reviewed',
-  kind: 'selection' | 'file' = 'selection') {
+function entry(
+  range: [number, number],
+  status: 'reviewed' | 'dismissed' = 'reviewed',
+  kind: 'selection' | 'file' = 'selection',
+) {
   const record = { id: 'x', kind } as ReviewRecord
   const res: Resolution = { status, effectiveRange: range }
   return { record, res }
@@ -35,7 +38,11 @@ describe('fileCoverage', () => {
 
 describe('rollup / pct', () => {
   it('raw line sums, nulls skipped', () => {
-    const r = rollup([{ reviewedLines: 5, totalLines: 10 }, null, { reviewedLines: 0, totalLines: 30 }])!
+    const r = rollup([
+      { reviewedLines: 5, totalLines: 10 },
+      null,
+      { reviewedLines: 0, totalLines: 30 },
+    ])!
     expect(r).toEqual({ reviewedLines: 5, totalLines: 40 })
     expect(pct(r)).toBe(13)
   })
@@ -46,8 +53,12 @@ describe('rollup / pct', () => {
 
 describe('rollup with unreviewed entries (v1.1)', () => {
   it('sums {0,N} unreviewed files into the denominator', () => {
-    expect(rollup([{ reviewedLines: 3, totalLines: 3 }, { reviewedLines: 0, totalLines: 7 }]))
-      .toEqual({ reviewedLines: 3, totalLines: 10 })
+    expect(
+      rollup([
+        { reviewedLines: 3, totalLines: 3 },
+        { reviewedLines: 0, totalLines: 7 },
+      ]),
+    ).toEqual({ reviewedLines: 3, totalLines: 10 })
   })
 })
 

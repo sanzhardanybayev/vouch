@@ -5,7 +5,13 @@ import { buildLineIndex, resolveRecord } from '../core/anchor'
 import { fileCoverage, pct, type FileCoverage } from '../core/coverage'
 import { textFileCoverage } from '../core/linecount'
 import { isInsideRoot } from '../core/paths'
-import { buildTree, headerStats, type HeaderStats, type TreeFile, type TreeFolder } from '../core/treemodel'
+import {
+  buildTree,
+  headerStats,
+  type HeaderStats,
+  type TreeFile,
+  type TreeFolder,
+} from '../core/treemodel'
 import { aggregateEngineers } from '../core/engineers'
 import { shouldRequeue } from '../core/requeue'
 import { compileVouchIgnore, type VouchIgnore } from '../core/vouchignore'
@@ -48,11 +54,13 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     subscriptions: vscode.Disposable[],
   ) {
     subscriptions.push(
-      ctx.onDidChange(() => { void this.onCtxChange() }),
-      pipeline.onDidUpdate(uri => this.onPipelineUpdate(uri)),
-      vscode.workspace.onDidChangeConfiguration(e => {
+      ctx.onDidChange(() => {
+        void this.onCtxChange()
+      }),
+      pipeline.onDidUpdate((uri) => this.onPipelineUpdate(uri)),
+      vscode.workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration('vouch.coverage.enabled')) {
-          void this.reloadFileLists().catch(err => logError('sidebar.configChange', err))
+          void this.reloadFileLists().catch((err) => logError('sidebar.configChange', err))
         }
       }),
     )
@@ -66,12 +74,16 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     const scheduleFileListReload = (): void => {
       if (this.fsWatchTimer) clearTimeout(this.fsWatchTimer)
       this.fsWatchTimer = setTimeout(() => {
-        void this.reloadFileLists().catch(err => logError('sidebar.fsWatch', err))
+        void this.reloadFileLists().catch((err) => logError('sidebar.fsWatch', err))
       }, 300)
     }
     fsWatcher.onDidCreate(scheduleFileListReload)
     fsWatcher.onDidDelete(scheduleFileListReload)
-    subscriptions.push(fsWatcher, { dispose: () => { if (this.fsWatchTimer) clearTimeout(this.fsWatchTimer) } })
+    subscriptions.push(fsWatcher, {
+      dispose: () => {
+        if (this.fsWatchTimer) clearTimeout(this.fsWatchTimer)
+      },
+    })
     // .vouchignore's CONTENT is membership, so unlike source files its edits
     // must reload. A per-root RelativePattern anchored at rootDir also fires
     // when .vouch/.vouchignore live ABOVE a subfolder workspace, where the
@@ -79,18 +91,25 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     this.buildIgnoreWatchers(scheduleFileListReload)
     subscriptions.push(
       ctx.onDidChange(() => this.buildIgnoreWatchers(scheduleFileListReload)),
-      { dispose: () => { for (const w of this.ignoreWatchers) w.dispose() } },
+      {
+        dispose: () => {
+          for (const w of this.ignoreWatchers) w.dispose()
+        },
+      },
     )
-    void this.reloadFileLists().catch(err => logError('sidebar.initialLoad', err))
+    void this.reloadFileLists().catch((err) => logError('sidebar.initialLoad', err))
   }
 
   private ignoreWatchers: vscode.Disposable[] = []
   private buildIgnoreWatchers(onChange: () => void): void {
     for (const w of this.ignoreWatchers) w.dispose()
-    this.ignoreWatchers = this.ctx.roots.map(root => {
+    this.ignoreWatchers = this.ctx.roots.map((root) => {
       const w = vscode.workspace.createFileSystemWatcher(
-        new vscode.RelativePattern(vscode.Uri.file(root.rootDir), '.vouchignore'))
-      w.onDidCreate(onChange); w.onDidChange(onChange); w.onDidDelete(onChange)
+        new vscode.RelativePattern(vscode.Uri.file(root.rootDir), '.vouchignore'),
+      )
+      w.onDidCreate(onChange)
+      w.onDidChange(onChange)
+      w.onDidDelete(onChange)
       return w
     })
   }
@@ -114,10 +133,11 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     // directions. not-live -> live (init/pull created .vouch/) needs a scan;
     // live -> not-live (.vouch/ removed) must drop the stale list so the
     // header stops counting a dead root. Plus roots that left the workspace.
-    const stale = this.ctx.roots.some(r => this.rootLive(r) !== this.fileList.has(r.rootDir)) ||
-      [...this.fileList.keys()].some(dir => !this.ctx.roots.some(r => r.rootDir === dir))
+    const stale =
+      this.ctx.roots.some((r) => this.rootLive(r) !== this.fileList.has(r.rootDir)) ||
+      [...this.fileList.keys()].some((dir) => !this.ctx.roots.some((r) => r.rootDir === dir))
     if (stale) {
-      await this.loadFileLists().catch(err => logError('sidebar.onCtxChange', err))
+      await this.loadFileLists().catch((err) => logError('sidebar.onCtxChange', err))
     }
     this.refresh()
   }
@@ -129,7 +149,7 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
 
   private async loadFileLists(): Promise<void> {
     for (const dir of [...this.fileList.keys()]) {
-      if (!this.ctx.roots.some(r => r.rootDir === dir)) {
+      if (!this.ctx.roots.some((r) => r.rootDir === dir)) {
         this.fileList.delete(dir)
         this.truncated.delete(dir) // a removed root must not leave a stuck "(partial)"
       }
@@ -142,19 +162,21 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
         continue
       }
       const gitFiles = await lsFiles(root.rootDir)
-      const { list, truncated: fallbackTruncated } = gitFiles.length > 0
-        ? { list: gitFiles, truncated: false } : await this.findFallback(root)
+      const { list, truncated: fallbackTruncated } =
+        gitFiles.length > 0 ? { list: gitFiles, truncated: false } : await this.findFallback(root)
       // Apply .vouchignore BEFORE the cap so the coverage UNIVERSE is the
       // post-filter set: ignored files must not consume slots and push real
       // files past the cap, and narrowing the universe below the cap must
       // actually clear "(partial)".
       const ig = this.ignores.get(root.rootDir)!
-      const kept = list.filter(p => !ig.ignores(p))
+      const kept = list.filter((p) => !ig.ignores(p))
       if (kept.length > MAX_FILES || fallbackTruncated) {
         this.truncated.add(root.rootDir)
-        logError('sidebar.loadFileLists',
+        logError(
+          'sidebar.loadFileLists',
           `${kept.length}${fallbackTruncated ? '+' : ''} files in ${root.rootDir}; ` +
-          `coverage capped at ${MAX_FILES} (header shows "partial")`)
+            `coverage capped at ${MAX_FILES} (header shows "partial")`,
+        )
       } else {
         this.truncated.delete(root.rootDir)
       }
@@ -188,8 +210,8 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     // be missing files once it's hit.
     const uris = await vscode.workspace.findFiles('**/*', '**/node_modules/**', MAX_FILES + 1)
     const list = uris
-      .filter(u => isInsideRoot(root.rootDir, u.fsPath))
-      .map(u => path.relative(root.rootDir, u.fsPath).split(path.sep).join('/'))
+      .filter((u) => isInsideRoot(root.rootDir, u.fsPath))
+      .map((u) => path.relative(root.rootDir, u.fsPath).split(path.sep).join('/'))
     return { list, truncated: uris.length > MAX_FILES }
   }
 
@@ -200,8 +222,11 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     // deleted file, or a root that no longer exists) so covCache doesn't grow
     // unboundedly, and (b) requeue the small set of files that actually need
     // recomputing.
-    const validAbs = new Set(this.ctx.roots.flatMap(root =>
-      (this.fileList.get(root.rootDir) ?? []).map(p => path.join(root.rootDir, p))))
+    const validAbs = new Set(
+      this.ctx.roots.flatMap((root) =>
+        (this.fileList.get(root.rootDir) ?? []).map((p) => path.join(root.rootDir, p)),
+      ),
+    )
     for (const key of this.covCache.keys()) {
       if (!validAbs.has(key)) this.covCache.delete(key)
     }
@@ -216,11 +241,14 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     // own). See core/requeue.ts for the pure decision. Already-counted,
     // unreviewed, unattested files are the only ones left cached — this is
     // what keeps a single attest/dismiss from requeuing the whole tree.
-    this.queue = this.ctx.roots.flatMap(root =>
+    this.queue = this.ctx.roots.flatMap((root) =>
       (this.fileList.get(root.rootDir) ?? [])
-        .filter(p => fs.existsSync(path.join(root.rootDir, p)))
-        .filter(p => shouldRequeue(this.isAttested(root, p), this.covCache.get(path.join(root.rootDir, p))))
-        .map(sourcePath => ({ root, sourcePath })))
+        .filter((p) => fs.existsSync(path.join(root.rootDir, p)))
+        .filter((p) =>
+          shouldRequeue(this.isAttested(root, p), this.covCache.get(path.join(root.rootDir, p))),
+        )
+        .map((sourcePath) => ({ root, sourcePath })),
+    )
     this.runQueue()
     this.emitter.fire(undefined)
   }
@@ -244,7 +272,11 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     this.queueRunning = true
     const tick = (): void => {
       const job = this.queue.shift()
-      if (!job) { this.queueRunning = false; this.emitter.fire(undefined); return }
+      if (!job) {
+        this.queueRunning = false
+        this.emitter.fire(undefined)
+        return
+      }
       void this.processJob(job).finally(() => setTimeout(tick, 25))
     }
     tick()
@@ -266,7 +298,8 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
         // re-reading disk — otherwise the sidebar % reflects last-saved
         // content and visibly disagrees with the gutter until save.
         const openDoc = vscode.workspace.textDocuments.find(
-          d => d.uri.scheme === 'file' && d.uri.fsPath === abs)
+          (d) => d.uri.scheme === 'file' && d.uri.fsPath === abs,
+        )
         if (openDoc) {
           const status = await this.pipeline.statusFor(openDoc)
           // A live buffer has no disk mtime; -1 just needs to differ from any
@@ -286,10 +319,15 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
         // takes the conservative rule; the shared index keeps the scan
         // linear across all of the file's records.
         const index = buildLineIndex(text)
-        const entries = state.current.filter(isKnownKind).map(record => ({
-          record, res: resolveRecord(record, text, null, index) }))
+        const entries = state.current.filter(isKnownKind).map((record) => ({
+          record,
+          res: resolveRecord(record, text, null, index),
+        }))
         this.covCache.set(abs, {
-          mtimeMs: stat.mtimeMs, coverage: fileCoverage(entries, text), reviewed: true })
+          mtimeMs: stat.mtimeMs,
+          coverage: fileCoverage(entries, text),
+          reviewed: true,
+        })
         return
       }
       // Unreviewed file: line-count only, and only if it hasn't been counted
@@ -320,7 +358,10 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     const out: TreeFile[] = []
     for (const p of this.fileList.get(root.rootDir) ?? []) {
       const cached = this.covCache.get(path.join(root.rootDir, p))
-      if (!cached) { out.push({ path: p, coverage: 'pending', reviewed: false }); continue }
+      if (!cached) {
+        out.push({ path: p, coverage: 'pending', reviewed: false })
+        continue
+      }
       out.push({ path: p, coverage: cached.coverage, reviewed: cached.reviewed })
     }
     return out
@@ -333,23 +374,32 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
   getTestSnapshot(): { header: HeaderStats; roots: { rootDir: string; tree: TreeFolder }[] } {
     return {
       header: this.computeHeaderStats(),
-      roots: this.ctx.roots.map(root => ({ rootDir: root.rootDir, tree: buildTree(this.treeFiles(root)) })),
+      roots: this.ctx.roots.map((root) => ({
+        rootDir: root.rootDir,
+        tree: buildTree(this.treeFiles(root)),
+      })),
     }
   }
 
   private computeHeaderStats(): HeaderStats {
-    const files = this.ctx.roots.flatMap(root => this.treeFiles(root))
-    const counts = this.ctx.roots.reduce((acc, root) => {
-      const c = root.store.counts(this.includeFor(root))
-      acc.records += c.records
-      for (const [email, entry] of c.perAuthor) {
-        const ex = acc.perAuthor.get(email)
-        acc.perAuthor.set(email, ex
-          ? { name: entry.name, current: ex.current + entry.current }
-          : { name: entry.name, current: entry.current })
-      }
-      return acc
-    }, { records: 0, perAuthor: new Map<string, { name: string; current: number }>() })
+    const files = this.ctx.roots.flatMap((root) => this.treeFiles(root))
+    const counts = this.ctx.roots.reduce(
+      (acc, root) => {
+        const c = root.store.counts(this.includeFor(root))
+        acc.records += c.records
+        for (const [email, entry] of c.perAuthor) {
+          const ex = acc.perAuthor.get(email)
+          acc.perAuthor.set(
+            email,
+            ex
+              ? { name: entry.name, current: ex.current + entry.current }
+              : { name: entry.name, current: entry.current },
+          )
+        }
+        return acc
+      },
+      { records: 0, perAuthor: new Map<string, { name: string; current: number }>() },
+    )
     return headerStats(files, files.length, counts)
   }
 
@@ -358,17 +408,24 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
       const h = this.computeHeaderStats()
       const item = new vscode.TreeItem('Coverage', vscode.TreeItemCollapsibleState.None)
       const partial = this.truncated.size > 0 ? ' (partial)' : ''
-      item.description = !this.coverageEnabled() ? 'coverage disabled'
-        : h.pending ? '…'
-        : h.workspacePct === null ? 'no reviews yet'
-        : `${h.workspacePct}% · ${h.reviewedFiles}/${h.totalFiles} files · ${h.records} reviews${partial}`
+      item.description = !this.coverageEnabled()
+        ? 'coverage disabled'
+        : h.pending
+          ? '…'
+          : h.workspacePct === null
+            ? 'no reviews yet'
+            : `${h.workspacePct}% · ${h.reviewedFiles}/${h.totalFiles} files · ${h.records} reviews${partial}`
       const notes: string[] = []
       if (!this.coverageEnabled()) {
-        notes.push('File scanning is off (vouch.coverage.enabled). Reviewers and orphans still shown.')
+        notes.push(
+          'File scanning is off (vouch.coverage.enabled). Reviewers and orphans still shown.',
+        )
       }
       if (this.truncated.size > 0) {
-        notes.push(`Partial: more than ${MAX_FILES.toLocaleString()} tracked files - ` +
-          'coverage covers only the first slice. Use .vouchignore to narrow the universe.')
+        notes.push(
+          `Partial: more than ${MAX_FILES.toLocaleString()} tracked files - ` +
+            'coverage covers only the first slice. Use .vouchignore to narrow the universe.',
+        )
       }
       const corrupt = this.ctx.roots.reduce((n, r) => n + r.store.corruptLines, 0)
       if (corrupt > 0) {
@@ -380,7 +437,9 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     }
     if (el.t === 'welcome') {
       const item = new vscode.TreeItem(
-        'Initialize Vouch to track coverage here', vscode.TreeItemCollapsibleState.None)
+        'Initialize Vouch to track coverage here',
+        vscode.TreeItemCollapsibleState.None,
+      )
       item.description = path.basename(el.root.rootDir)
       item.iconPath = new vscode.ThemeIcon('rocket')
       item.command = { command: 'vouch.init', title: 'Initialize' }
@@ -392,14 +451,20 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
       return item
     }
     if (el.t === 'engineer') {
-      const eng = this.engineers().find(e => e.email === el.email)
-      const item = new vscode.TreeItem(eng?.name ?? el.email, vscode.TreeItemCollapsibleState.Collapsed)
+      const eng = this.engineers().find((e) => e.email === el.email)
+      const item = new vscode.TreeItem(
+        eng?.name ?? el.email,
+        vscode.TreeItemCollapsibleState.Collapsed,
+      )
       item.description = eng ? `${eng.reviewCount} reviews · ${eng.files.length} files` : ''
       item.iconPath = new vscode.ThemeIcon('person')
       return item
     }
     if (el.t === 'engineerFile') {
-      const item = new vscode.TreeItem(path.basename(el.sourcePath), vscode.TreeItemCollapsibleState.None)
+      const item = new vscode.TreeItem(
+        path.basename(el.sourcePath),
+        vscode.TreeItemCollapsibleState.None,
+      )
       item.description = `${el.count}`
       item.resourceUri = vscode.Uri.file(path.join(el.root.rootDir, el.sourcePath))
       item.command = { command: 'vscode.open', title: 'Open', arguments: [item.resourceUri] }
@@ -413,18 +478,28 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
       return item
     }
     if (el.t === 'file') {
-      const item = new vscode.TreeItem(path.basename(el.file.path), vscode.TreeItemCollapsibleState.None)
+      const item = new vscode.TreeItem(
+        path.basename(el.file.path),
+        vscode.TreeItemCollapsibleState.None,
+      )
       const c = el.file.coverage
       if (el.file.reviewed && c && c !== 'pending') {
         const p = pct(c)
         item.description = `${p}%`
-        item.iconPath = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor(
-          p === 100 ? 'charts.green' : p > 0 ? 'charts.yellow' : 'charts.red'))
+        item.iconPath = new vscode.ThemeIcon(
+          'circle-filled',
+          new vscode.ThemeColor(
+            p === 100 ? 'charts.green' : p > 0 ? 'charts.yellow' : 'charts.red',
+          ),
+        )
       } else {
         item.iconPath = new vscode.ThemeIcon('circle-outline')
       }
-      item.command = { command: 'vscode.open', title: 'Open',
-        arguments: [vscode.Uri.file(path.join(el.root.rootDir, el.file.path))] }
+      item.command = {
+        command: 'vscode.open',
+        title: 'Open',
+        arguments: [vscode.Uri.file(path.join(el.root.rootDir, el.file.path))],
+      }
       return item
     }
     if (el.t === 'orphanRoot') {
@@ -441,7 +516,9 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     // Aggregate across roots by email; each file entry carries the root it
     // came from (see core/engineers.ts) so getChildren can open the correct
     // root's file directly, instead of guessing it back afterwards.
-    return aggregateEngineers(this.ctx.roots, root => root.store.perEngineer(this.includeFor(root)))
+    return aggregateEngineers(this.ctx.roots, (root) =>
+      root.store.perEngineer(this.includeFor(root)),
+    )
   }
 
   getChildren(el?: Item): Item[] {
@@ -450,38 +527,49 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
       if (this.engineers().length > 0) out.push({ t: 'reviewersRoot' })
       if (this.coverageEnabled()) {
         for (const root of this.ctx.roots) {
-          if (!this.rootLive(root)) { out.push({ t: 'welcome', root }); continue }
+          if (!this.rootLive(root)) {
+            out.push({ t: 'welcome', root })
+            continue
+          }
           const tree = buildTree(this.treeFiles(root))
-          out.push(...tree.folders.map(node => ({ t: 'folder' as const, root, node })))
-          out.push(...tree.files.map(file => ({ t: 'file' as const, root, file })))
+          out.push(...tree.folders.map((node) => ({ t: 'folder' as const, root, node })))
+          out.push(...tree.files.map((file) => ({ t: 'file' as const, root, file })))
         }
       }
-      const orphans = this.ctx.roots.flatMap(r =>
-        r.store.orphans(p => fs.existsSync(path.join(r.rootDir, p)), this.includeFor(r)))
+      const orphans = this.ctx.roots.flatMap((r) =>
+        r.store.orphans((p) => fs.existsSync(path.join(r.rootDir, p)), this.includeFor(r)),
+      )
       if (orphans.length > 0) out.push({ t: 'orphanRoot' })
       return out
     }
     if (el.t === 'reviewersRoot') {
-      return this.engineers().map(e => ({ t: 'engineer' as const, email: e.email }))
+      return this.engineers().map((e) => ({ t: 'engineer' as const, email: e.email }))
     }
     if (el.t === 'engineer') {
-      const eng = this.engineers().find(e => e.email === el.email)
+      const eng = this.engineers().find((e) => e.email === el.email)
       if (!eng) return []
       // Each file entry already carries the root it came from (aggregateEngineers),
       // so no need to guess it back — a same-named file in two roots yields two
       // distinct rows here, each opening its own root's copy.
-      return eng.files.map(f => ({ t: 'engineerFile' as const, root: f.root, sourcePath: f.sourcePath, count: f.count }))
+      return eng.files.map((f) => ({
+        t: 'engineerFile' as const,
+        root: f.root,
+        sourcePath: f.sourcePath,
+        count: f.count,
+      }))
     }
     if (el.t === 'folder') {
       return [
-        ...el.node.folders.map(node => ({ t: 'folder' as const, root: el.root, node })),
-        ...el.node.files.map(file => ({ t: 'file' as const, root: el.root, file })),
+        ...el.node.folders.map((node) => ({ t: 'folder' as const, root: el.root, node })),
+        ...el.node.files.map((file) => ({ t: 'file' as const, root: el.root, file })),
       ]
     }
     if (el.t === 'orphanRoot') {
-      return this.ctx.roots.flatMap(r =>
-        r.store.orphans(p => fs.existsSync(path.join(r.rootDir, p)), this.includeFor(r))
-          .map(p => ({ t: 'orphan' as const, path: p })))
+      return this.ctx.roots.flatMap((r) =>
+        r.store
+          .orphans((p) => fs.existsSync(path.join(r.rootDir, p)), this.includeFor(r))
+          .map((p) => ({ t: 'orphan' as const, path: p })),
+      )
     }
     return []
   }

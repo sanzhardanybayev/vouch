@@ -4,7 +4,10 @@ import * as fs from 'node:fs'
 import { ReviewStore } from '../core/store'
 import { repoRoot } from './gitinfo'
 
-export interface RootEntry { rootDir: string; store: ReviewStore }
+export interface RootEntry {
+  rootDir: string
+  store: ReviewStore
+}
 
 // Resolve symlinks (e.g. macOS /tmp, /var -> /private/...) so path.relative
 // comparisons between roots and file paths agree. Falls back progressively
@@ -60,8 +63,11 @@ export class VouchContext {
     const dirs = await workspaceRootDirs()
     const next: RootEntry[] = []
     for (const rootDir of dirs) {
-      const existing = this.roots.find(r => r.rootDir === rootDir)
-      if (existing) { next.push(existing); continue }
+      const existing = this.roots.find((r) => r.rootDir === rootDir)
+      if (existing) {
+        next.push(existing)
+        continue
+      }
       const store = new ReviewStore(rootDir)
       await store.load()
       next.push({ rootDir, store })

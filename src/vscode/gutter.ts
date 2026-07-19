@@ -10,12 +10,13 @@ export class Gutter {
   private readonly decorations: Record<Status, vscode.TextEditorDecorationType>
 
   constructor(extensionUri: vscode.Uri) {
-    const icon = (name: string): vscode.Uri =>
-      vscode.Uri.joinPath(extensionUri, 'media', name)
+    const icon = (name: string): vscode.Uri => vscode.Uri.joinPath(extensionUri, 'media', name)
     const mk = (svg: string, ruler: string): vscode.TextEditorDecorationType =>
       vscode.window.createTextEditorDecorationType({
-        gutterIconPath: icon(svg), gutterIconSize: 'contain',
-        overviewRulerColor: ruler, overviewRulerLane: vscode.OverviewRulerLane.Right,
+        gutterIconPath: icon(svg),
+        gutterIconSize: 'contain',
+        overviewRulerColor: ruler,
+        overviewRulerLane: vscode.OverviewRulerLane.Right,
       })
     this.decorations = {
       reviewed: mk('reviewed.svg', '#1DBF9A'),
@@ -32,7 +33,8 @@ export class Gutter {
       byLine.set(line, prev !== undefined && RANK[prev] >= RANK[res.status] ? prev : res.status)
     }
     for (const want of ['reviewed', 'dismissed', 'ambiguous'] as const) {
-      const ranges = [...byLine.entries()].filter(([, s]) => s === want)
+      const ranges = [...byLine.entries()]
+        .filter(([, s]) => s === want)
         .map(([l]) => new vscode.Range(l - 1, 0, l - 1, 0))
       editor.setDecorations(this.decorations[want], ranges)
     }

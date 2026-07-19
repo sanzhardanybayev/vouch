@@ -28,16 +28,16 @@ Vouch is a VS Code extension (Cursor-compatible) for human-authored review cover
 
 ## 2. Decisions made during brainstorming
 
-| Question | Decision |
-|---|---|
-| Symbol detection | LSP symbol provider (`vscode.executeDocumentSymbolProvider`), hierarchical `DocumentSymbol` shape only (see §5). No bundled parsers. |
-| Hash strictness | Exact text of the range (CRLF→LF normalized). Any edit — whitespace, comments — dismisses. |
-| Identity | `git config user.name` / `user.email`. No GitHub API. |
-| Anchoring | Text+symbol anchor: hash + last-known range + optional symbol path. Relocate via symbol lookup, fall back to text search (two-stage: first-line-hash prefilter, SHA-256 confirm). |
-| Review granularity | Free-form line ranges are the primitive; function/class/file are snapping conveniences. |
-| Call-site status | HoverProvider + `executeDefinitionProvider`; status line only, no timeline. |
-| Name | **Vouch** — `.vouch/` folder, `vouch.*` commands. |
-| V1 scope | Core marking + gutter + dismiss, hover timeline + diff, coverage sidebar, call-site hover status. |
+| Question           | Decision                                                                                                                                                                          |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Symbol detection   | LSP symbol provider (`vscode.executeDocumentSymbolProvider`), hierarchical `DocumentSymbol` shape only (see §5). No bundled parsers.                                              |
+| Hash strictness    | Exact text of the range (CRLF→LF normalized). Any edit — whitespace, comments — dismisses.                                                                                        |
+| Identity           | `git config user.name` / `user.email`. No GitHub API.                                                                                                                             |
+| Anchoring          | Text+symbol anchor: hash + last-known range + optional symbol path. Relocate via symbol lookup, fall back to text search (two-stage: first-line-hash prefilter, SHA-256 confirm). |
+| Review granularity | Free-form line ranges are the primitive; function/class/file are snapping conveniences.                                                                                           |
+| Call-site status   | HoverProvider + `executeDefinitionProvider`; status line only, no timeline.                                                                                                       |
+| Name               | **Vouch** — `.vouch/` folder, `vouch.*` commands.                                                                                                                                 |
+| V1 scope           | Core marking + gutter + dismiss, hover timeline + diff, coverage sidebar, call-site hover status.                                                                                 |
 
 ## 3. Data model
 
@@ -48,16 +48,16 @@ One review record:
   "id": "uuid-v4",
   "author": { "name": "Sanzhar", "email": "sendwichmj@gmail.com" }, // from git config at creation
   "createdAt": "2026-07-13T12:00:00Z",
-  "commit": "abc1234def",           // HEAD sha at review time; basis for web link + diff (may not contain the reviewed text — see "dirty")
-  "dirty": true,                    // true if the file differed from HEAD at review time (working tree or index)
-  "kind": "function",               // "selection" | "function" | "class" | "file" — how it was created
-  "symbol": "AuthService/login",    // optional symbol path (hierarchical DocumentSymbol names joined with "/")
-  "range": [120, 154],              // last-known 1-based inclusive line range; absent for kind=file
-  "hash": "sha256:<hex>",           // exact text of the range (or whole file for kind=file) at review time, CRLF→LF normalized
-  "headHash": "sha256:<hex>",       // hash of the range's FIRST line — prefilter for text-scan relocation (§5); absent for kind=file
+  "commit": "abc1234def", // HEAD sha at review time; basis for web link + diff (may not contain the reviewed text — see "dirty")
+  "dirty": true, // true if the file differed from HEAD at review time (working tree or index)
+  "kind": "function", // "selection" | "function" | "class" | "file" — how it was created
+  "symbol": "AuthService/login", // optional symbol path (hierarchical DocumentSymbol names joined with "/")
+  "range": [120, 154], // last-known 1-based inclusive line range; absent for kind=file
+  "hash": "sha256:<hex>", // exact text of the range (or whole file for kind=file) at review time, CRLF→LF normalized
+  "headHash": "sha256:<hex>", // hash of the range's FIRST line — prefilter for text-scan relocation (§5); absent for kind=file
   "comment": "checked error paths", // optional free text
-  "supersedes": ["prev-uuid"],      // optional — uuids of same-user records this record replaces (see anchor identity, §5)
-  "movedFrom": "old-uuid"           // optional — set by re-attach (§7); original author/createdAt preserved on the copy
+  "supersedes": ["prev-uuid"], // optional — uuids of same-user records this record replaces (see anchor identity, §5)
+  "movedFrom": "old-uuid", // optional — set by re-attach (§7); original author/createdAt preserved on the copy
 }
 ```
 
@@ -99,7 +99,7 @@ Location: **git repository root** (so record paths are stable no matter which su
 
 ## 5. Status resolution (anchor engine)
 
-**Anchor identity.** All of a user's records connected via `supersedes` links form one *anchor chain*. The current attestation of a chain is its latest non-revoked record by `createdAt` (union-merge forks resolve by timestamp). To prevent parallel chains for the same code: **every vouch command auto-supersedes** — the new record's `supersedes` lists the ids of the same user's current records it absorbs. The trigger is full enclosure of the old scope (equal ranges and same symbol count; a file review encloses everything), never partial overlap - see [ADR 0001](../../adr/0001-supersede-on-enclosure-only.md). Running "Vouch: Review enclosing function" twice therefore yields one chain, not two icons.
+**Anchor identity.** All of a user's records connected via `supersedes` links form one _anchor chain_. The current attestation of a chain is its latest non-revoked record by `createdAt` (union-merge forks resolve by timestamp). To prevent parallel chains for the same code: **every vouch command auto-supersedes** — the new record's `supersedes` lists the ids of the same user's current records it absorbs. The trigger is full enclosure of the old scope (equal ranges and same symbol count; a file review encloses everything), never partial overlap - see [ADR 0001](../../adr/0001-supersede-on-enclosure-only.md). Running "Vouch: Review enclosing function" twice therefore yields one chain, not two icons.
 
 **Resolving one current record against the current document:**
 
@@ -223,17 +223,17 @@ Per-file, v1: user picks the new path. For every record of the orphaned file (al
 
 ## 12. Naming & commands
 
-| Command | Title |
-|---|---|
-| `vouch.init` | Vouch: Initialize in workspace |
-| `vouch.selection` | Vouch: Review selected lines |
-| `vouch.function` | Vouch: Review enclosing function |
-| `vouch.class` | Vouch: Review enclosing class |
-| `vouch.file` | Vouch: Review entire file |
-| `vouch.reReview` | Vouch: Re-review (after dismissal) |
-| `vouch.unvouch` | Vouch: Revoke my review |
-| `vouch.showDiff` | Vouch: Diff since my review |
-| `vouch.openCommitOnWeb` | Vouch: Open review commit on web |
-| `vouch.reattach` | Vouch: Re-attach orphaned reviews |
+| Command                 | Title                              |
+| ----------------------- | ---------------------------------- |
+| `vouch.init`            | Vouch: Initialize in workspace     |
+| `vouch.selection`       | Vouch: Review selected lines       |
+| `vouch.function`        | Vouch: Review enclosing function   |
+| `vouch.class`           | Vouch: Review enclosing class      |
+| `vouch.file`            | Vouch: Review entire file          |
+| `vouch.reReview`        | Vouch: Re-review (after dismissal) |
+| `vouch.unvouch`         | Vouch: Revoke my review            |
+| `vouch.showDiff`        | Vouch: Diff since my review        |
+| `vouch.openCommitOnWeb` | Vouch: Open review commit on web   |
+| `vouch.reattach`        | Vouch: Re-attach orphaned reviews  |
 
 Tech stack: TypeScript, esbuild bundling, `@vscode/vsce` packaging. No runtime dependencies beyond Node built-ins (`crypto`, `fs`) and the VS Code API; git access via child_process (no libgit2).

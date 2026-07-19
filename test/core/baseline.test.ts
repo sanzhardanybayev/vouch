@@ -5,9 +5,21 @@ import { sha256, normalizeEol } from '../../src/core/text'
 import type { ReviewRecord } from '../../src/core/types'
 
 const COMMITTED = 'a\nb\nc\nd\ne\n'
-function rec(range: [number, number], hash: string, kind: 'selection' | 'file' = 'selection'): ReviewRecord {
-  return { id: 'r', author: { name: 'S', email: 's@x.com' }, createdAt: '2026-01-01T00:00:00Z',
-    commit: 'c', dirty: false, kind, range: kind === 'file' ? undefined : range, hash }
+function rec(
+  range: [number, number],
+  hash: string,
+  kind: 'selection' | 'file' = 'selection',
+): ReviewRecord {
+  return {
+    id: 'r',
+    author: { name: 'S', email: 's@x.com' },
+    createdAt: '2026-01-01T00:00:00Z',
+    commit: 'c',
+    dirty: false,
+    kind,
+    range: kind === 'file' ? undefined : range,
+    hash,
+  }
 }
 
 describe('baselineSlice', () => {

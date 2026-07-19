@@ -7,19 +7,33 @@ import { shardPath, authorSlug } from '../../src/core/paths'
 import type { ReviewRecord, Tombstone } from '../../src/core/types'
 
 let dir: string
-beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'vouch-')) })
-afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+beforeEach(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'vouch-'))
+})
+afterEach(async () => {
+  await rm(dir, { recursive: true, force: true })
+})
 
 const SAN = { name: 'San', email: 's@x.com' }
 const BOB = { name: 'Bob', email: 'b@x.com' }
 function rec(id: string, author = SAN, extra: Partial<ReviewRecord> = {}): ReviewRecord {
-  return { id, author, createdAt: '2026-01-01T00:00:00Z', commit: 'c', dirty: false,
-    kind: 'selection', range: [1, 2], hash: 'sha256:aa', headHash: 'sha256:bb', ...extra }
+  return {
+    id,
+    author,
+    createdAt: '2026-01-01T00:00:00Z',
+    commit: 'c',
+    dirty: false,
+    kind: 'selection',
+    range: [1, 2],
+    hash: 'sha256:aa',
+    headHash: 'sha256:bb',
+    ...extra,
+  }
 }
 async function writeShard(sourcePath: string, email: string, lines: object[]): Promise<void> {
   const p = join(dir, shardPath(sourcePath, authorSlug(email)))
   await mkdir(dirname(p), { recursive: true })
-  await writeFile(p, lines.map(l => JSON.stringify(l)).join('\n') + '\n', 'utf8')
+  await writeFile(p, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8')
 }
 
 describe('ReviewStore', () => {
@@ -40,8 +54,13 @@ describe('ReviewStore', () => {
   })
 
   it('cross-shard dedupe by id and revocation apply', async () => {
-    const t: Tombstone = { id: 't1', author: SAN, createdAt: '2026-01-02T00:00:00Z',
-      revokes: 'r1', reason: 'unvouch' }
+    const t: Tombstone = {
+      id: 't1',
+      author: SAN,
+      createdAt: '2026-01-02T00:00:00Z',
+      revokes: 'r1',
+      reason: 'unvouch',
+    }
     await writeShard('src/a.ts', SAN.email, [rec('r1'), rec('r1'), t])
     const s = new ReviewStore(dir)
     await s.load()
@@ -64,7 +83,7 @@ describe('ReviewStore', () => {
     await writeShard('src/here.ts', SAN.email, [rec('r2')])
     const s = new ReviewStore(dir)
     await s.load()
-    expect(s.orphans(p => p === 'src/here.ts')).toEqual(['src/gone.ts'])
+    expect(s.orphans((p) => p === 'src/here.ts')).toEqual(['src/gone.ts'])
   })
 })
 
@@ -76,7 +95,7 @@ describe('perEngineer (v1.1)', () => {
     const s = new ReviewStore(dir)
     await s.load()
     const eng = s.perEngineer()
-    expect(eng.map(e => e.email)).toEqual([SAN.email, BOB.email]) // San 3 > Bob 1
+    expect(eng.map((e) => e.email)).toEqual([SAN.email, BOB.email]) // San 3 > Bob 1
     const san = eng[0]!
     expect(san.reviewCount).toBe(3)
     expect(san.files).toEqual([
@@ -89,7 +108,13 @@ describe('perEngineer (v1.1)', () => {
   it('excludes revoked chains', async () => {
     await writeShard('src/a.ts', SAN.email, [
       rec('r1'),
-      { id: 't1', author: SAN, createdAt: '2026-01-02T00:00:00Z', revokes: 'r1', reason: 'unvouch' },
+      {
+        id: 't1',
+        author: SAN,
+        createdAt: '2026-01-02T00:00:00Z',
+        revokes: 'r1',
+        reason: 'unvouch',
+      },
     ])
     const s = new ReviewStore(dir)
     await s.load()

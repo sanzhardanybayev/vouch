@@ -38,9 +38,9 @@ function patternToRegex(pattern: string): RegExp {
   // written as an ESCAPE SEQUENCE - never a raw byte, which would make this
   // file binary to git and invisible in review. NUL cannot appear in a path
   // or a pattern, so the sentinel can never collide with pattern content.
-  const parts = body.split('/').map(seg =>
-    seg === '**' ? '\x00' : segmentToRegex(seg))
-  body = parts.join('/')
+  const parts = body.split('/').map((seg) => (seg === '**' ? '\x00' : segmentToRegex(seg)))
+  body = parts
+    .join('/')
     .replace(/\x00\//g, '(?:[^/]+/)*')
     .replace(/\/\x00/g, '(?:/[^/]+)*')
     .replace(/\x00/g, '.*')

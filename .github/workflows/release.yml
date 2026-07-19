@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ['v*']
 
 permissions:
   contents: write
@@ -30,6 +30,8 @@ jobs:
           fi
 
       - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
       - run: npm test
 
       - name: Package
@@ -48,5 +50,5 @@ jobs:
       - name: Attach .vsix to GitHub release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
-          files: "*.vsix"
+          files: '*.vsix'
           generate_release_notes: true

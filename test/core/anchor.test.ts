@@ -1,28 +1,58 @@
 import { describe, it, expect } from 'vitest'
 import {
-  resolveRecord, hashRangeOfText, ctxHashes, buildLineIndex,
-  resolveSymbolPathAll, enclosingSymbolOfRange,
-  HUGE_FILE_LINES, CONFIRM_CAP, type SymbolNode,
+  resolveRecord,
+  hashRangeOfText,
+  ctxHashes,
+  buildLineIndex,
+  resolveSymbolPathAll,
+  enclosingSymbolOfRange,
+  HUGE_FILE_LINES,
+  CONFIRM_CAP,
+  type SymbolNode,
 } from '../../src/core/anchor'
 import { splitLines } from '../../src/core/text'
 import type { ReviewRecord } from '../../src/core/types'
 
-const DOC = ['function a() {', '  return 1', '}', '', 'function b() {', '  return 2', '}'].join('\n')
+const DOC = ['function a() {', '  return 1', '}', '', 'function b() {', '  return 2', '}'].join(
+  '\n',
+)
 
-function recFor(docText: string, range: [number, number], extra: Partial<ReviewRecord> = {}): ReviewRecord {
+function recFor(
+  docText: string,
+  range: [number, number],
+  extra: Partial<ReviewRecord> = {},
+): ReviewRecord {
   const { hash, headHash } = hashRangeOfText(docText, range)
-  return { id: 'r1', author: { name: 'S', email: 's@x.com' }, createdAt: '2026-01-01T00:00:00Z',
-    commit: 'c', dirty: false, kind: 'selection', range, hash, headHash, ...extra }
+  return {
+    id: 'r1',
+    author: { name: 'S', email: 's@x.com' },
+    createdAt: '2026-01-01T00:00:00Z',
+    commit: 'c',
+    dirty: false,
+    kind: 'selection',
+    range,
+    hash,
+    headHash,
+    ...extra,
+  }
 }
 
 /** Like recFor but also captures ctx hashes, as the new attest flow does. */
-function recWithCtx(docText: string, range: [number, number], extra: Partial<ReviewRecord> = {}): ReviewRecord {
+function recWithCtx(
+  docText: string,
+  range: [number, number],
+  extra: Partial<ReviewRecord> = {},
+): ReviewRecord {
   const { before, after } = ctxHashes(splitLines(docText), range)
   return recFor(docText, range, { ctxBefore: before, ctxAfter: after, ...extra })
 }
 
-function sym(name: string, kindClass: SymbolNode['kindClass'],
-  range: [number, number], children: SymbolNode[] = []): SymbolNode {
+function sym(
+  name: string,
+  kindClass: SymbolNode['kindClass'],
+  range: [number, number],
+  children: SymbolNode[] = [],
+): SymbolNode {
   return { name, kindClass, range, children }
 }
 
@@ -60,8 +90,11 @@ describe('resolveRecord — content scan (no location signals)', () => {
   })
 
   it('non-numeric range values → dismissed at line 1, never NaN', () => {
-    const r = recFor(DOC, [1, 3],
-      { range: ['a', 'b'] as unknown as [number, number], hash: 'nope', headHash: undefined })
+    const r = recFor(DOC, [1, 3], {
+      range: ['a', 'b'] as unknown as [number, number],
+      hash: 'nope',
+      headHash: undefined,
+    })
     expect(resolveRecord(r, DOC)).toEqual({ status: 'dismissed', effectiveRange: [1, 1] })
   })
 
@@ -83,12 +116,25 @@ describe('resolveRecord — duplicate content (issue #2 core)', () => {
   const TWINS = 'function p() {\n' + block + block + '}'
 
   it('legacy record, multiple matches → ambiguous, never nearest-guess', () => {
-    const doc = ['function dup() {', '  return 9', '}', '', 'pad', '', 'function dup2() {', '  return 9', '}'].join('\n')
+    const doc = [
+      'function dup() {',
+      '  return 9',
+      '}',
+      '',
+      'pad',
+      '',
+      'function dup2() {',
+      '  return 9',
+      '}',
+    ].join('\n')
     // identical single line '  return 9' exists at lines 2 and 8
     const r = recFor(doc, [8, 8])
     const res = resolveRecord(r, doc)
     expect(res.status).toBe('ambiguous')
-    expect(res.candidates).toEqual([[8, 8], [2, 2]]) // nearest to stored first
+    expect(res.candidates).toEqual([
+      [8, 8],
+      [2, 2],
+    ]) // nearest to stored first
     expect(res.effectiveRange).toEqual([8, 8])
   })
 
@@ -101,8 +147,12 @@ describe('resolveRecord — duplicate content (issue #2 core)', () => {
   it('twins + shift + edited line below (0 ctx survivors) → ambiguous, never stored-range green', () => {
     const r = recWithCtx(TWINS, [3, 3])
     // shift twins down one AND change the closing context under the bottom twin
-    const mutated = '// header\n' + 'function p() {\n' + block + block + '}\n// trailer changed'
-      .replace('}', '} // altered')
+    const mutated =
+      '// header\n' +
+      'function p() {\n' +
+      block +
+      block +
+      '}\n// trailer changed'.replace('}', '} // altered')
     const res = resolveRecord(r, mutated)
     expect(res.status).toBe('ambiguous')
     expect(res.candidates).toHaveLength(2)
@@ -135,12 +185,18 @@ describe('resolveRecord — duplicate content (issue #2 core)', () => {
 
 describe('resolveRecord — symbol layer', () => {
   // fnA lines 1-4, fnB lines 6-9; identical body line in both
-  const DOC2 = ['function fnA() {', '  guard()', '  return', '}', '',
-    'function fnB() {', '  guard()', '  return', '}'].join('\n')
-  const SYMS: SymbolNode[] = [
-    sym('fnA', 'function', [1, 4]),
-    sym('fnB', 'function', [6, 9]),
-  ]
+  const DOC2 = [
+    'function fnA() {',
+    '  guard()',
+    '  return',
+    '}',
+    '',
+    'function fnB() {',
+    '  guard()',
+    '  return',
+    '}',
+  ].join('\n')
+  const SYMS: SymbolNode[] = [sym('fnA', 'function', [1, 4]), sym('fnB', 'function', [6, 9])]
 
   it('duplicate content across two functions: symbol filter keeps the reviewed context', () => {
     const r = recFor(DOC2, [7, 7], { anchorSymbol: 'fnB' })
@@ -160,7 +216,10 @@ describe('resolveRecord — symbol layer', () => {
     const r = recFor(DOC2, [2, 2], { anchorSymbol: 'fnA' })
     const shifted = '// top\n' + DOC2
     const shiftedSyms = [sym('fnA', 'function', [2, 5]), sym('fnB', 'function', [7, 10])]
-    expect(resolveRecord(r, shifted, shiftedSyms)).toEqual({ status: 'reviewed', effectiveRange: [3, 3] })
+    expect(resolveRecord(r, shifted, shiftedSyms)).toEqual({
+      status: 'reviewed',
+      effectiveRange: [3, 3],
+    })
   })
 
   it('enclosing symbol renamed → ambiguous (orphaned), never silent reviewed or dismissed', () => {
@@ -215,7 +274,9 @@ describe('resolveRecord — conservative rule (symbols unavailable)', () => {
   it('record with no location signal behaves identically with or without symbols', () => {
     const r = recFor(DOC2, [2, 2])
     const shifted = '// pad\n' + DOC2
-    expect(resolveRecord(r, shifted, null)).toEqual(resolveRecord(r, shifted, [sym('fnA', 'function', [2, 4])]))
+    expect(resolveRecord(r, shifted, null)).toEqual(
+      resolveRecord(r, shifted, [sym('fnA', 'function', [2, 4])]),
+    )
   })
 })
 
@@ -236,8 +297,8 @@ describe('resolveRecord — bounded paths (no headHash / huge files)', () => {
 
   it('huge file: twin shifted onto the stored range with failing ctx → ambiguous, not reviewed', () => {
     const filler = Array.from({ length: HUGE_FILE_LINES + 5 }, (_, i) => `line ${i}`)
-    filler[99] = 'dup'   // L100
-    filler[100] = 'dup'  // L101 ← reviewed
+    filler[99] = 'dup' // L100
+    filler[100] = 'dup' // L101 ← reviewed
     const doc = filler.join('\n')
     const r = recWithCtx(doc, [101, 101])
     const shifted = 'inserted\n' + doc // dup twins now at 101/102; stored range hits wrong twin
@@ -250,15 +311,25 @@ describe('resolveRecord — bounded paths (no headHash / huge files)', () => {
     const r = recWithCtx(doc, [5000, 5001], { anchorSymbol: 'big' })
     const shifted = 'inserted\n' + doc
     const syms = [sym('big', 'function', [4000, 6500])]
-    expect(resolveRecord(r, shifted, syms)).toEqual({ status: 'reviewed', effectiveRange: [5001, 5002] })
+    expect(resolveRecord(r, shifted, syms)).toEqual({
+      status: 'reviewed',
+      effectiveRange: [5001, 5002],
+    })
   })
 })
 
 describe('resolveRecord — kind=file', () => {
   it('whole-file match / mismatch', () => {
     const { hash } = hashRangeOfText(DOC, [1, splitLines(DOC).length])
-    const r: ReviewRecord = { id: 'f', author: { name: 'S', email: 's@x.com' },
-      createdAt: '2026-01-01T00:00:00Z', commit: 'c', dirty: false, kind: 'file', hash }
+    const r: ReviewRecord = {
+      id: 'f',
+      author: { name: 'S', email: 's@x.com' },
+      createdAt: '2026-01-01T00:00:00Z',
+      commit: 'c',
+      dirty: false,
+      kind: 'file',
+      hash,
+    }
     expect(resolveRecord(r, DOC).status).toBe('reviewed')
     expect(resolveRecord(r, DOC + '\nx').status).toBe('dismissed')
   })
@@ -284,15 +355,15 @@ describe('ctxHashes', () => {
 
 describe('symbol helpers', () => {
   const tree: SymbolNode[] = [
-    sym('A', 'class', [1, 20], [
-      sym('m', 'function', [2, 5]),
-      sym('m', 'function', [7, 10]),
-    ]),
+    sym('A', 'class', [1, 20], [sym('m', 'function', [2, 5]), sym('m', 'function', [7, 10])]),
     sym('top', 'function', [22, 30]),
   ]
 
   it('resolveSymbolPathAll returns every match of a duplicated path', () => {
-    expect(resolveSymbolPathAll(tree, 'A/m').map(n => n.range)).toEqual([[2, 5], [7, 10]])
+    expect(resolveSymbolPathAll(tree, 'A/m').map((n) => n.range)).toEqual([
+      [2, 5],
+      [7, 10],
+    ])
     expect(resolveSymbolPathAll(tree, 'top')).toHaveLength(1)
     expect(resolveSymbolPathAll(tree, 'nope')).toHaveLength(0)
   })
@@ -315,26 +386,45 @@ describe('buildLineIndex', () => {
 
 describe('resolveRecord — duplicate symbol names (hard containment)', () => {
   // two same-named symbols; the reviewed text + neighborhood cut-pasted OUTSIDE both
-  const DOC3 = ['function fn() {', '  a()', '}', 'function fn() {', '  b()', '}',
-    'pad', '  SECRET', 'pad2'].join('\n')
-  const DUP_SYMS: SymbolNode[] = [
-    sym('fn', 'function', [1, 3]),
-    sym('fn', 'function', [4, 6]),
-  ]
+  const DOC3 = [
+    'function fn() {',
+    '  a()',
+    '}',
+    'function fn() {',
+    '  b()',
+    '}',
+    'pad',
+    '  SECRET',
+    'pad2',
+  ].join('\n')
+  const DUP_SYMS: SymbolNode[] = [sym('fn', 'function', [1, 3]), sym('fn', 'function', [4, 6])]
 
   it('a ctx survivor OUTSIDE every occurrence of the symbol never resolves reviewed', () => {
     // capture pretends the text was once inside fn; now it exists only at L8
     const { hash, headHash } = hashRangeOfText(DOC3, [8, 8])
     const { before, after } = ctxHashes(splitLines(DOC3), [8, 8])
-    const r: ReviewRecord = { id: 'r1', author: { name: 'S', email: 's@x.com' },
-      createdAt: '2026-01-01T00:00:00Z', commit: 'c', dirty: false, kind: 'selection',
-      range: [2, 2], hash, headHash, anchorSymbol: 'fn', ctxBefore: before, ctxAfter: after }
+    const r: ReviewRecord = {
+      id: 'r1',
+      author: { name: 'S', email: 's@x.com' },
+      createdAt: '2026-01-01T00:00:00Z',
+      commit: 'c',
+      dirty: false,
+      kind: 'selection',
+      range: [2, 2],
+      hash,
+      headHash,
+      anchorSymbol: 'fn',
+      ctxBefore: before,
+      ctxAfter: after,
+    }
     const res = resolveRecord(r, DOC3, DUP_SYMS)
     expect(res.status).not.toBe('reviewed')
   })
 
   it('legacy record (no ctx) intact at stored range, unique in file → reviewed despite duplicate names', () => {
-    const doc = ['function add() {', '  impl()', '}', 'function add() {', '  other()', '}'].join('\n')
+    const doc = ['function add() {', '  impl()', '}', 'function add() {', '  other()', '}'].join(
+      '\n',
+    )
     const dupSyms = [sym('add', 'function', [1, 3]), sym('add', 'function', [4, 6])]
     const r = recFor(doc, [2, 2], { anchorSymbol: 'add' })
     expect(resolveRecord(r, doc, dupSyms)).toEqual({ status: 'reviewed', effectiveRange: [2, 2] })
@@ -353,6 +443,9 @@ describe('buildLineIndex — scan-cap boundary', () => {
     // exactly HUGE_FILE_LINES real lines → still the complete scan path.
     const base = Array.from({ length: HUGE_FILE_LINES - 1 }, (_, i) => `line ${i}`).join('\n')
     const r = recWithCtx(base, [50, 52])
-    expect(resolveRecord(r, 'inserted\n' + base)).toEqual({ status: 'reviewed', effectiveRange: [51, 53] })
+    expect(resolveRecord(r, 'inserted\n' + base)).toEqual({
+      status: 'reviewed',
+      effectiveRange: [51, 53],
+    })
   })
 })

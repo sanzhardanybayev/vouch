@@ -12,4 +12,7 @@ const ctx = await esbuild.context({
   sourcemap: true,
 })
 if (watch) await ctx.watch()
-else { await ctx.rebuild(); await ctx.dispose() }
+else {
+  await ctx.rebuild()
+  await ctx.dispose()
+}

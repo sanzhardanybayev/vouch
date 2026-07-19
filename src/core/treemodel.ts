@@ -1,6 +1,10 @@
 import { rollup, pct, type FileCoverage } from './coverage'
 
-export interface TreeFile { path: string; coverage: FileCoverage | null | 'pending'; reviewed: boolean }
+export interface TreeFile {
+  path: string
+  coverage: FileCoverage | null | 'pending'
+  reviewed: boolean
+}
 export interface TreeFolder {
   name: string
   path: string
@@ -16,9 +20,15 @@ export function buildTree(files: TreeFile[]): TreeFolder {
     let node = root
     for (let i = 0; i < segments.length - 1; i++) {
       const name = segments[i]!
-      let child = node.folders.find(x => x.name === name)
+      let child = node.folders.find((x) => x.name === name)
       if (!child) {
-        child = { name, path: segments.slice(0, i + 1).join('/'), folders: [], files: [], coverage: null }
+        child = {
+          name,
+          path: segments.slice(0, i + 1).join('/'),
+          folders: [],
+          files: [],
+          coverage: null,
+        }
         node.folders.push(child)
       }
       node = child
@@ -55,19 +65,20 @@ export interface HeaderStats {
 }
 
 export function headerStats(
-  files: TreeFile[], totalFiles: number,
+  files: TreeFile[],
+  totalFiles: number,
   counts: { records: number; perAuthor: Map<string, { name: string; current: number }> },
 ): HeaderStats {
-  const pending = files.some(f => f.coverage === 'pending')
+  const pending = files.some((f) => f.coverage === 'pending')
   const covs = files
-    .map(f => f.coverage)
+    .map((f) => f.coverage)
     .filter((c): c is FileCoverage => c !== null && c !== 'pending')
   const total = rollup(covs)
   return {
     workspacePct: total ? pct(total) : null,
     pending,
     records: counts.records,
-    reviewedFiles: files.filter(f => f.reviewed).length,
+    reviewedFiles: files.filter((f) => f.reviewed).length,
     totalFiles,
     perAuthor: [...counts.perAuthor.values()],
   }

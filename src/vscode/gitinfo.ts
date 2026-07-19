@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import type { Author } from '../core/types'
 
 export function git(args: string[], cwd: string, opts?: { raw?: boolean }): Promise<string | null> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     execFile('git', args, { cwd, maxBuffer: 64 * 1024 * 1024 }, (err, stdout) => {
       resolve(err ? null : opts?.raw ? stdout : stdout.replace(/\n$/, ''))
     })
@@ -29,7 +29,9 @@ export async function isDirty(root: string, sourcePath: string): Promise<boolean
 }
 
 export async function showAtCommit(
-  root: string, commit: string, sourcePath: string,
+  root: string,
+  commit: string,
+  sourcePath: string,
 ): Promise<string | null> {
   // Guard against option injection: commit values from shared .vouch/ records are untrusted
   if (commit.startsWith('-')) return null

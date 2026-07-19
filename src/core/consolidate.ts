@@ -13,9 +13,9 @@ export function summarizeCandidates(
 ): ConsolidationSummary {
   return {
     total: candidates.length,
-    dismissed: candidates.filter(c => c.res.status === 'dismissed').length,
-    ambiguous: candidates.filter(c => c.res.status === 'ambiguous').length,
-    withComments: candidates.filter(c => c.record.comment).length,
+    dismissed: candidates.filter((c) => c.res.status === 'dismissed').length,
+    ambiguous: candidates.filter((c) => c.res.status === 'ambiguous').length,
+    withComments: candidates.filter((c) => c.record.comment).length,
   }
 }
 
@@ -27,13 +27,11 @@ function label(rec: ReviewRecord): string {
   return 'file'
 }
 
-export function prefillComment(
-  candidates: { record: ReviewRecord; res: Resolution }[],
-): string {
+export function prefillComment(candidates: { record: ReviewRecord; res: Resolution }[]): string {
   return candidates
-    .map(c => ({ c, text: (c.record.comment ?? '').replace(/\s+/g, ' ').trim() }))
-    .filter(e => e.text)
+    .map((c) => ({ c, text: (c.record.comment ?? '').replace(/\s+/g, ' ').trim() }))
+    .filter((e) => e.text)
     .sort((a, b) => (a.c.record.range?.[0] ?? 0) - (b.c.record.range?.[0] ?? 0))
-    .map(e => `> ${label(e.c.record)}: ${e.text}`)
+    .map((e) => `> ${label(e.c.record)}: ${e.text}`)
     .join(' | ')
 }

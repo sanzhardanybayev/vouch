@@ -5,18 +5,39 @@ import type { ReviewRecord, Tombstone } from '../../src/core/types'
 const AUTHOR = { name: 'San', email: 's@x.com' }
 const OTHER = { name: 'Bob', email: 'b@x.com' }
 function rec(id: string, createdAt: string, extra: Partial<ReviewRecord> = {}): ReviewRecord {
-  return { id, author: AUTHOR, createdAt, commit: 'c1', dirty: false, kind: 'selection',
-    range: [1, 3], hash: 'sha256:aa', headHash: 'sha256:bb', ...extra }
+  return {
+    id,
+    author: AUTHOR,
+    createdAt,
+    commit: 'c1',
+    dirty: false,
+    kind: 'selection',
+    range: [1, 3],
+    hash: 'sha256:aa',
+    headHash: 'sha256:bb',
+    ...extra,
+  }
 }
 function tomb(id: string, revokes: string, extra: Partial<Tombstone> = {}): Tombstone {
-  return { id, author: AUTHOR, createdAt: '2026-07-13T10:00:00Z', revokes, reason: 'unvouch', ...extra }
+  return {
+    id,
+    author: AUTHOR,
+    createdAt: '2026-07-13T10:00:00Z',
+    revokes,
+    reason: 'unvouch',
+    ...extra,
+  }
 }
-const jl = (...objs: object[]): string => objs.map(o => JSON.stringify(o)).join('\n') + '\n'
+const jl = (...objs: object[]): string => objs.map((o) => JSON.stringify(o)).join('\n') + '\n'
 
 describe('parseJsonl', () => {
   it('parses records, skips corrupt lines and blanks, counts corruption', () => {
-    const content = JSON.stringify(rec('a', '2026-01-01T00:00:00Z')) + '\n' +
-      'NOT JSON\n' + '\n' + '{"noId": true}\n'
+    const content =
+      JSON.stringify(rec('a', '2026-01-01T00:00:00Z')) +
+      '\n' +
+      'NOT JSON\n' +
+      '\n' +
+      '{"noId": true}\n'
     const { lines, corrupt } = parseJsonl(content)
     expect(lines).toHaveLength(1)
     expect(lines[0]!.id).toBe('a')
@@ -24,8 +45,15 @@ describe('parseJsonl', () => {
   })
 
   it('accepts every legacy 0.0.2 line shape', () => {
-    const fileRec = { id: 'f', author: AUTHOR, createdAt: '2026-01-01T00:00:00Z',
-      commit: '', dirty: false, kind: 'file', hash: 'sha256:aa' }
+    const fileRec = {
+      id: 'f',
+      author: AUTHOR,
+      createdAt: '2026-01-01T00:00:00Z',
+      commit: '',
+      dirty: false,
+      kind: 'file',
+      hash: 'sha256:aa',
+    }
     const moved = tomb('t', 'a', { reason: 'moved', movedTo: 'src/new.ts' })
     const { lines, corrupt } = parseJsonl(jl(rec('a', '2026-01-01T00:00:00Z'), fileRec, moved))
     expect(lines).toHaveLength(3)
@@ -33,8 +61,11 @@ describe('parseJsonl', () => {
   })
 
   it('accepts new-format fields (anchorSymbol, ctxBefore, ctxAfter)', () => {
-    const r = rec('a', '2026-01-01T00:00:00Z',
-      { anchorSymbol: 'AuthService/login', ctxBefore: 'sha256:cc', ctxAfter: 'sha256:dd' })
+    const r = rec('a', '2026-01-01T00:00:00Z', {
+      anchorSymbol: 'AuthService/login',
+      ctxBefore: 'sha256:cc',
+      ctxAfter: 'sha256:dd',
+    })
     const { lines, corrupt } = parseJsonl(jl(r))
     expect(lines).toHaveLength(1)
     expect(corrupt).toBe(0)
@@ -62,15 +93,18 @@ describe('parseJsonl', () => {
 
   it('rejects malformed ranges (reversed, fractional, below 1, wrong arity, non-numeric)', () => {
     const shapes = [[3, 1], [1.5, 2], [0, 3], [1], ['a', 'b'], [1, 2, 3]]
-    const content = jl(...shapes.map((range, i) =>
-      ({ ...rec(`r${i}`, '2026-01-01T00:00:00Z'), range })))
+    const content = jl(
+      ...shapes.map((range, i) => ({ ...rec(`r${i}`, '2026-01-01T00:00:00Z'), range })),
+    )
     const { lines, corrupt } = parseJsonl(content)
     expect(lines).toHaveLength(0)
     expect(corrupt).toBe(shapes.length)
   })
 
   it('rejects a record whose supersedes contains its own id', () => {
-    const { lines, corrupt } = parseJsonl(jl(rec('a', '2026-01-01T00:00:00Z', { supersedes: ['a'] })))
+    const { lines, corrupt } = parseJsonl(
+      jl(rec('a', '2026-01-01T00:00:00Z', { supersedes: ['a'] })),
+    )
     expect(lines).toHaveLength(0)
     expect(corrupt).toBe(1)
   })
@@ -106,14 +140,17 @@ describe('dedupeById', () => {
   it('collapses byte-identical duplicate records (union-merge case)', () => {
     const a = rec('a', '2026-01-01T00:00:00Z')
     const { lines, corrupt } = dedupeById([a, structuredClone(a), rec('b', '2026-01-01T00:00:00Z')])
-    expect(lines.map(l => l.id).sort()).toEqual(['a', 'b'])
+    expect(lines.map((l) => l.id).sort()).toEqual(['a', 'b'])
     expect(corrupt).toBe(0)
   })
 
   it('drops ALL records sharing an id with differing content, counts them corrupt', () => {
     const v1 = rec('a', '2026-01-01T00:00:00Z')
     const v2 = rec('a', '2026-01-02T00:00:00Z')
-    for (const order of [[v1, v2], [v2, v1]]) {
+    for (const order of [
+      [v1, v2],
+      [v2, v1],
+    ]) {
       const { lines, corrupt } = dedupeById(order)
       expect(lines).toHaveLength(0)
       expect(corrupt).toBe(2)
@@ -123,7 +160,10 @@ describe('dedupeById', () => {
   it('a record colliding with a tombstone id is dropped in every input order', () => {
     const fake = rec('dup', '2026-01-01T00:00:00Z')
     const t = tomb('dup', 'x')
-    for (const order of [[fake, t], [t, fake]]) {
+    for (const order of [
+      [fake, t],
+      [t, fake],
+    ]) {
       const { lines } = dedupeById(order)
       expect(lines).toHaveLength(1)
       expect(isTombstone(lines[0]!)).toBe(true)
@@ -133,9 +173,15 @@ describe('dedupeById', () => {
   it('never drops tombstones, even on tombstone-vs-tombstone id collision', () => {
     const real = tomb('t1', 'victim-record')
     const decoy = tomb('t1', 'nonexistent')
-    for (const order of [[real, decoy], [decoy, real]]) {
+    for (const order of [
+      [real, decoy],
+      [decoy, real],
+    ]) {
       const { lines } = dedupeById(order)
-      const revokeTargets = lines.filter(isTombstone).map(t => t.revokes).sort()
+      const revokeTargets = lines
+        .filter(isTombstone)
+        .map((t) => t.revokes)
+        .sort()
       expect(revokeTargets).toEqual(['nonexistent', 'victim-record'])
     }
   })
@@ -146,14 +192,14 @@ describe('resolveChains — author binding', () => {
     const victim = rec('v', '2026-01-01T00:00:00Z')
     const attacker = rec('atk', '9999-01-01T00:00:00Z', { author: OTHER, supersedes: ['v'] })
     const s = resolveChains([victim, attacker])
-    expect(s.current.map(r => r.id).sort()).toEqual(['atk', 'v'])
+    expect(s.current.map((r) => r.id).sort()).toEqual(['atk', 'v'])
     expect(s.chains.size).toBe(2)
   })
 
   it('ignores a cross-author unvouch tombstone', () => {
     const victim = rec('v', '2026-01-01T00:00:00Z')
     const s = resolveChains([victim, tomb('t', 'v', { author: OTHER })])
-    expect(s.current.map(r => r.id)).toEqual(['v'])
+    expect(s.current.map((r) => r.id)).toEqual(['v'])
     expect(s.revokedChains.size).toBe(0)
   })
 
@@ -166,17 +212,19 @@ describe('resolveChains — author binding', () => {
 
   it('honors same-author supersede with case-differing email', () => {
     const a = rec('a', '2026-01-01T00:00:00Z')
-    const b = rec('b', '2026-01-02T00:00:00Z',
-      { author: { name: 'San', email: 'S@X.COM' }, supersedes: ['a'] })
+    const b = rec('b', '2026-01-02T00:00:00Z', {
+      author: { name: 'San', email: 'S@X.COM' },
+      supersedes: ['a'],
+    })
     const s = resolveChains([a, b])
-    expect(s.current.map(r => r.id)).toEqual(['b'])
+    expect(s.current.map((r) => r.id)).toEqual(['b'])
   })
 
   it('ignores a cross-author moved tombstone with no verified copy', () => {
     const victim = rec('v', '2026-01-01T00:00:00Z')
     const t = tomb('t', 'v', { author: OTHER, reason: 'moved', movedTo: 'src/new.ts' })
     const s = resolveChains([victim, t], new Map())
-    expect(s.current.map(r => r.id)).toEqual(['v'])
+    expect(s.current.map((r) => r.id)).toEqual(['v'])
   })
 
   it('honors a legacy cross-author moved tombstone when a matching copy exists elsewhere', () => {
@@ -199,14 +247,14 @@ describe('resolveChains — author binding', () => {
   it('ignores a tombstone whose target id has no record (cannot verify ownership)', () => {
     const mine = rec('b', '2026-01-02T00:00:00Z', { supersedes: ['ghost'] })
     const s = resolveChains([mine, tomb('t', 'ghost', { author: OTHER })])
-    expect(s.current.map(r => r.id)).toEqual(['b'])
+    expect(s.current.map((r) => r.id)).toEqual(['b'])
   })
 })
 
 describe('resolveChains — topology', () => {
   it('single record is its own chain and current', () => {
     const s = resolveChains([rec('a', '2026-01-01T00:00:00Z')])
-    expect(s.current.map(r => r.id)).toEqual(['a'])
+    expect(s.current.map((r) => r.id)).toEqual(['a'])
     expect(s.chains.size).toBe(1)
   })
 
@@ -215,18 +263,18 @@ describe('resolveChains — topology', () => {
       rec('a', '2026-01-01T00:00:00Z'),
       rec('b', '2026-01-02T00:00:00Z', { supersedes: ['a'] }),
     ])
-    expect(s.current.map(r => r.id)).toEqual(['b'])
+    expect(s.current.map((r) => r.id)).toEqual(['b'])
     expect(s.chains.size).toBe(1)
     const chain = [...s.chains.values()][0]!
-    expect(chain.map(r => r.id)).toEqual(['a', 'b'])
+    expect(chain.map((r) => r.id)).toEqual(['a', 'b'])
   })
 
   it('a superseded record never wins on a later timestamp (clock skew)', () => {
     const s = resolveChains([
-      rec('a', '2026-01-01T10:00:00Z'),                        // clock 10 min fast
+      rec('a', '2026-01-01T10:00:00Z'), // clock 10 min fast
       rec('b', '2026-01-01T09:50:00Z', { supersedes: ['a'] }), // explicit replacement
     ])
-    expect(s.current.map(r => r.id)).toEqual(['b'])
+    expect(s.current.map((r) => r.id)).toEqual(['b'])
   })
 
   it('fork (two records superseding same parent) resolves by createdAt, tie by id', () => {
@@ -235,7 +283,7 @@ describe('resolveChains — topology', () => {
       rec('b', '2026-01-02T00:00:00Z', { supersedes: ['a'] }),
       rec('c', '2026-01-02T00:00:00Z', { supersedes: ['a'] }),
     ])
-    expect(s.current.map(r => r.id)).toEqual(['c'])
+    expect(s.current.map((r) => r.id)).toEqual(['c'])
   })
 
   it('hand-made 2-cycle still yields exactly one current record', () => {
@@ -243,7 +291,7 @@ describe('resolveChains — topology', () => {
       rec('a', '2026-01-01T00:00:00Z', { supersedes: ['b'] }),
       rec('b', '2026-01-02T00:00:00Z', { supersedes: ['a'] }),
     ])
-    expect(s.current.map(r => r.id)).toEqual(['b'])
+    expect(s.current.map((r) => r.id)).toEqual(['b'])
   })
 
   it('revoking ANY record kills the whole chain — no resurrection', () => {
@@ -267,7 +315,7 @@ describe('resolveChains — topology', () => {
 
   it('supersedes referencing a missing id still forms a chain', () => {
     const s = resolveChains([rec('b', '2026-01-02T00:00:00Z', { supersedes: ['ghost'] })])
-    expect(s.current.map(r => r.id)).toEqual(['b'])
+    expect(s.current.map((r) => r.id)).toEqual(['b'])
   })
 
   it('independent chains stay independent', () => {
@@ -282,9 +330,12 @@ describe('resolveChains — topology', () => {
   it('unknown-kind record still participates in topology (its supersedes edge works)', () => {
     const s = resolveChains([
       rec('a', '2026-01-01T00:00:00Z'),
-      rec('f', '2026-01-02T00:00:00Z', { kind: 'paragraph' as ReviewRecord['kind'], supersedes: ['a'] }),
+      rec('f', '2026-01-02T00:00:00Z', {
+        kind: 'paragraph' as ReviewRecord['kind'],
+        supersedes: ['a'],
+      }),
     ])
-    expect(s.current.map(r => r.id)).toEqual(['f'])
+    expect(s.current.map((r) => r.id)).toEqual(['f'])
   })
 
   it('unparseable createdAt sorts lowest, never NaN-poisons the tie-break', () => {
@@ -309,14 +360,14 @@ describe('resolveChains — revocation cannot be vetoed by foreign records', () 
     const c = rec('C', '2026-01-03T00:00:00Z', { author: OTHER, supersedes: ['A0'] })
     const t = tomb('t', 'A1')
     const s = resolveChains([a1, c, t])
-    expect(s.current.map(r => r.id)).not.toContain('A1')
+    expect(s.current.map((r) => r.id)).not.toContain('A1')
   })
 
   it('my tombstone never kills a foreign record sharing the chain', () => {
     const a1 = rec('A1', '2026-01-02T00:00:00Z', { supersedes: ['A0'] })
     const c = rec('C', '2026-01-03T00:00:00Z', { author: OTHER, supersedes: ['A0'] })
     const s = resolveChains([a1, c, tomb('t', 'A1')])
-    expect(s.current.map(r => r.id)).toContain('C')
+    expect(s.current.map((r) => r.id)).toContain('C')
   })
 
   it('two authors unioned via a shared absent ancestor both stay current, regardless of createdAt', () => {
@@ -326,15 +377,15 @@ describe('resolveChains — revocation cannot be vetoed by foreign records', () 
     for (const foreign of [later, earlier]) {
       const s = resolveChains([mine, foreign])
       expect(s.chains.size).toBe(1)
-      expect(s.current.map(r => r.id).sort()).toEqual(['A1', 'C'])
+      expect(s.current.map((r) => r.id).sort()).toEqual(['A1', 'C'])
     }
   })
 
-  it('per-author tips: each author\'s own supersede lineage still resolves inside a shared chain', () => {
+  it("per-author tips: each author's own supersede lineage still resolves inside a shared chain", () => {
     const mineOld = rec('A1', '2026-01-01T00:00:00Z', { supersedes: ['A0'] })
     const mineNew = rec('A2', '2026-01-02T00:00:00Z', { supersedes: ['A1'] })
     const theirs = rec('C', '9999-01-01T00:00:00Z', { author: OTHER, supersedes: ['A0'] })
     const s = resolveChains([mineOld, mineNew, theirs])
-    expect(s.current.map(r => r.id).sort()).toEqual(['A2', 'C'])
+    expect(s.current.map((r) => r.id).sort()).toEqual(['A2', 'C'])
   })
 })

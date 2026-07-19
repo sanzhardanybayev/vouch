@@ -2,14 +2,18 @@ import { countLines } from './text'
 import type { Resolution } from './anchor'
 import type { ReviewRecord } from './types'
 
-export interface FileCoverage { reviewedLines: number; totalLines: number }
+export interface FileCoverage {
+  reviewedLines: number
+  totalLines: number
+}
 
 export function fileCoverage(
-  resolved: { record: ReviewRecord; res: Resolution }[], docText: string,
+  resolved: { record: ReviewRecord; res: Resolution }[],
+  docText: string,
 ): FileCoverage | null {
   const totalLines = countLines(docText)
   if (totalLines === 0) return null
-  if (resolved.some(e => e.record.kind === 'file' && e.res.status === 'reviewed')) {
+  if (resolved.some((e) => e.record.kind === 'file' && e.res.status === 'reviewed')) {
     return { reviewedLines: totalLines, totalLines }
   }
   const covered = new Set<number>()

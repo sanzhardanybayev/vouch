@@ -12,11 +12,14 @@ describe('shouldRequeue', () => {
     expect(shouldRequeue(false, undefined)).toBe(true)
   })
 
-  it('requeues a file cached as reviewed even when no longer attested — ' +
-     'the regression: a dismissed/revoked last review must not keep serving ' +
-     'a stale reviewed:true entry forever', () => {
-    expect(shouldRequeue(false, { reviewed: true })).toBe(true)
-  })
+  it(
+    'requeues a file cached as reviewed even when no longer attested — ' +
+      'the regression: a dismissed/revoked last review must not keep serving ' +
+      'a stale reviewed:true entry forever',
+    () => {
+      expect(shouldRequeue(false, { reviewed: true })).toBe(true)
+    },
+  )
 
   it('leaves an already-counted, unreviewed, unattested file alone', () => {
     expect(shouldRequeue(false, { reviewed: false })).toBe(false)

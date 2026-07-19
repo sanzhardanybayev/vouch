@@ -4,7 +4,8 @@ import type { SymbolNode } from '../core/anchor'
 function kindClass(kind: vscode.SymbolKind): SymbolNode['kindClass'] {
   const K = vscode.SymbolKind
   if (kind === K.Function || kind === K.Method || kind === K.Constructor) return 'function'
-  if (kind === K.Class || kind === K.Interface || kind === K.Struct || kind === K.Enum) return 'class'
+  if (kind === K.Class || kind === K.Interface || kind === K.Struct || kind === K.Enum)
+    return 'class'
   return 'other'
 }
 

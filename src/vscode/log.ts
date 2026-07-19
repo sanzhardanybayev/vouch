@@ -6,7 +6,11 @@ let channel: vscode.OutputChannel | undefined
 
 export function initLog(subscriptions: vscode.Disposable[]): void {
   channel = vscode.window.createOutputChannel('Vouch')
-  subscriptions.push(channel, { dispose: () => { channel = undefined } })
+  subscriptions.push(channel, {
+    dispose: () => {
+      channel = undefined
+    },
+  })
 }
 
 export function logError(scope: string, err: unknown): void {
