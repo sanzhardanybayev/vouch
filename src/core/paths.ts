@@ -9,8 +9,13 @@ export function isInsideRoot(root: string, fsPath: string): boolean {
   return !rel.startsWith('..') && !path.isAbsolute(rel)
 }
 
+/** Canonical form for author-identity comparison everywhere (never for display). */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase()
+}
+
 export function authorSlug(email: string): string {
-  return createHash('sha256').update(email.trim().toLowerCase(), 'utf8').digest('hex').slice(0, 8)
+  return createHash('sha256').update(normalizeEmail(email), 'utf8').digest('hex').slice(0, 8)
 }
 
 export function shardPath(sourcePath: string, slug: string): string {

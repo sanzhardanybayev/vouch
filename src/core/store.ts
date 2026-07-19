@@ -1,6 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { join, relative } from 'node:path'
-import { dedupeById, parseJsonl, resolveChains, type ChainState } from './records'
+import { dedupeById, parseJsonl, resolveChains, type ChainState, type MovedIndex } from './records'
 import { sourcePathOfShard } from './paths'
 import type { VouchLine } from './types'
 
@@ -32,8 +32,29 @@ export class ReviewStore {
       if (!linesBySource.has(source)) linesBySource.set(source, [])
       linesBySource.get(source)!.push(...lines)
     }
+    const dedupedBySource = new Map<string, VouchLine[]>()
     for (const [source, lines] of linesBySource) {
-      this.bySource.set(source, resolveChains(dedupeById(lines)))
+      const { lines: deduped, corrupt } = dedupeById(lines)
+      this.corruptLines += corrupt
+      dedupedBySource.set(source, deduped)
+    }
+    // Moved copies live under a DIFFERENT source path than the tombstones that
+    // revoked their originals, so the index must span the whole store. Every
+    // parsed line counts, current or not: a later unvouch of the moved copy
+    // must not resurrect the old-path record.
+    const movedIndex: MovedIndex = new Map()
+    for (const lines of dedupedBySource.values()) {
+      for (const l of lines) {
+        const movedFrom = (l as { movedFrom?: string }).movedFrom
+        const hash = (l as { hash?: string }).hash
+        const email = l.author.email
+        if (!movedFrom || typeof hash !== 'string') continue
+        if (!movedIndex.has(movedFrom)) movedIndex.set(movedFrom, [])
+        movedIndex.get(movedFrom)!.push({ email, hash })
+      }
+    }
+    for (const [source, lines] of dedupedBySource) {
+      this.bySource.set(source, resolveChains(lines, movedIndex))
     }
   }
 
