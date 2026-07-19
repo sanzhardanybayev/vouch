@@ -7,19 +7,37 @@ import { commitUrl } from '../core/giturl'
 import { isValidSha } from '../core/hovermd'
 import { timelineHtml, type TimelineInput, type TimelineEntry } from '../core/timelinehtml'
 import type { VouchContext } from './context'
+import type { StatusPipeline } from './pipeline'
 import { findRecord } from './diff'
 import { remoteUrl } from './gitinfo'
 
-export async function openTimeline(ctx: VouchContext, recordId: string): Promise<void> {
-  const found = findRecord(ctx, recordId)
-  if (!found) { void vscode.window.showWarningMessage('Vouch: record not found.'); return }
-  const { rootDir, sourcePath } = found
-  const root = ctx.roots.find(r => r.rootDir === rootDir)!
-  const state = root.store.stateFor(sourcePath)!
+async function buildInput(
+  ctx: VouchContext, pipeline: StatusPipeline, rootDir: string, sourcePath: string,
+): Promise<TimelineInput | null> {
+  const root = ctx.roots.find(r => r.rootDir === rootDir)
+  const state = root?.store.stateFor(sourcePath)
+  if (!root || !state) return null
   const remote = await remoteUrl(rootDir)
 
+  // Buffer truth: when the file is open, statuses come from the same
+  // pipeline that drives the gutter/lens/hover, so the timeline can never
+  // show a green check the gutter has already dismissed. Disk text is the
+  // fallback for files that are not open anywhere.
+  const abs = path.join(rootDir, sourcePath)
+  const openDoc = vscode.workspace.textDocuments.find(
+    d => d.uri.scheme === 'file' && d.uri.fsPath === abs)
+  const pipelineEntries = openDoc ? (await pipeline.statusFor(openDoc)).entries : null
   let docText = ''
-  try { docText = fs.readFileSync(path.join(rootDir, sourcePath), 'utf8') } catch { /* gone */ }
+  if (!openDoc) {
+    try { docText = fs.readFileSync(abs, 'utf8') } catch { /* gone */ }
+  }
+  const statusOf = (id: string): TimelineEntry['status'] => {
+    if (pipelineEntries) {
+      return pipelineEntries.find(e => e.record.id === id)?.res.status ?? 'historical'
+    }
+    const rec = state.current.find(r => r.id === id)
+    return rec && docText !== '' ? resolveRecord(rec, docText).status : 'historical'
+  }
 
   const currentIds = new Set(state.current.map(r => r.id))
   const byUser = new Map<string, TimelineInput['users'][number]>()
@@ -29,8 +47,7 @@ export async function openTimeline(ctx: VouchContext, recordId: string): Promise
     if (!byUser.has(key)) byUser.set(key, { name: first.author.name, email: key, chains: [] })
     const entries: TimelineEntry[] = [...members].reverse().map(m => ({
       recordId: m.id,
-      status: currentIds.has(m.id) && docText !== ''
-        ? resolveRecord(m, docText).status : 'historical',
+      status: currentIds.has(m.id) ? statusOf(m.id) : 'historical',
       createdAt: m.createdAt,
       commit: m.commit,
       // Commit values come from shared, cross-user .vouch/ records and are
@@ -46,17 +63,53 @@ export async function openTimeline(ctx: VouchContext, recordId: string): Promise
     }))
     byUser.get(key)!.chains.push({ entries, revoked: state.revokedChains.has(rootId) })
   }
+  return { sourcePath, nowIso: new Date().toISOString(), users: [...byUser.values()] }
+}
+
+export async function openTimeline(
+  ctx: VouchContext, pipeline: StatusPipeline, recordId: string,
+): Promise<void> {
+  const found = findRecord(ctx, recordId)
+  if (!found) { void vscode.window.showWarningMessage('Vouch: record not found.'); return }
+  const { rootDir, sourcePath } = found
 
   const panel = vscode.window.createWebviewPanel('vouchTimeline',
     `Vouch: ${sourcePath}`, vscode.ViewColumn.Beside, { enableScripts: true })
-  const input: TimelineInput = {
-    sourcePath, nowIso: new Date().toISOString(), users: [...byUser.values()] }
-  panel.webview.html = timelineHtml(input, panel.webview.cspSource, randomUUID())
+
+  let renderQueued = false
+  const render = async (): Promise<void> => {
+    if (renderQueued) return
+    renderQueued = true
+    try {
+      const input = await buildInput(ctx, pipeline, rootDir, sourcePath)
+      if (input) panel.webview.html = timelineHtml(input, panel.webview.cspSource, randomUUID())
+    } finally {
+      renderQueued = false
+    }
+  }
+
+  // Stay truthful while open: store changes (attest/revoke/pull) come via
+  // ctx.onDidChange; live-buffer edits come via pipeline.onDidUpdate for
+  // this file's uri (already debounced by the pipeline).
+  const abs = path.join(rootDir, sourcePath)
+  const listeners = [
+    ctx.onDidChange(() => { void render() }),
+    pipeline.onDidUpdate(uri => {
+      if (uri.scheme === 'file' && uri.fsPath === abs) void render()
+    }),
+  ]
+  panel.onDidDispose(() => { for (const l of listeners) l.dispose() })
+
   panel.webview.onDidReceiveMessage((msg: { cmd: string; recordId: string }) => {
     if (msg.cmd === 'reReview') void vscode.commands.executeCommand('vouch.reReview', msg.recordId)
     if (msg.cmd === 'showDiff') void vscode.commands.executeCommand('vouch.showDiff', msg.recordId)
+    if (msg.cmd === 'resolveAmbiguous') {
+      void vscode.commands.executeCommand('vouch.resolveAmbiguous', msg.recordId)
+    }
     if (msg.cmd === 'reveal') void revealRecord(ctx, msg.recordId)
   })
+
+  await render()
 }
 
 // recordId arrives from the webview and is untrusted - it is only ever used

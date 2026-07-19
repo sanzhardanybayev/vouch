@@ -4,8 +4,8 @@ import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { buildRecord, buildReattachLines, overlaps, rebaseRange, supersedeCandidates } from '../core/attest'
 import { prefillComment, summarizeCandidates } from '../core/consolidate'
-import { enclosingSymbol, enclosingSymbolOfRange, resolveRecord, resolveSymbolPath } from '../core/anchor'
-import { normalizeEol } from '../core/text'
+import { enclosingSymbol, enclosingSymbolOfRange, hashRangeOfText, resolveRecord, resolveSymbolPath } from '../core/anchor'
+import { normalizeEol, splitLines } from '../core/text'
 import { authorSlug, normalizeEmail } from '../core/paths'
 import { appendLine, initVouch } from '../core/writer'
 import type { Author, RecordKind, ReviewRecord, Tombstone } from '../core/types'
@@ -266,7 +266,128 @@ export function registerCommands(
   reg2('vouch.file', attestCmd('file'))
   reg('vouch.unvouch', () => unvouch(extCtx, ctx, refresh))
   reg2('vouch.showDiff', (recordId: string) => showDiff(ctx, pipeline, recordId))
-  reg2('vouch.openTimeline', (recordId: string) => openTimeline(ctx, recordId))
+  reg2('vouch.openTimeline', (recordId: string) => openTimeline(ctx, pipeline, recordId))
+
+  // CodeLens groups can mix records from several authors and scopes on one
+  // line — diffing "the group" means picking which record first.
+  reg2('vouch.pickDiff', async (arg?: unknown) => {
+    const ids = Array.isArray(arg) ? arg.filter((x): x is string => typeof x === 'string') : []
+    if (ids.length === 0) return
+    if (ids.length === 1) { await showDiff(ctx, pipeline, ids[0]!); return }
+    const items = ids.flatMap(id => {
+      const found = findRecord(ctx, id)
+      if (!found) return []
+      const r = found.record
+      const scope = r.kind === 'file' ? 'file'
+        : r.symbol ?? (r.range ? `L${r.range[0]}-${r.range[1]}` : r.kind)
+      return [{ label: `${r.author.name} - ${r.kind} ${scope}`, id }]
+    })
+    const picked = await vscode.window.showQuickPick(items,
+      { placeHolder: 'Vouch: pick the review to diff' })
+    if (picked) await showDiff(ctx, pipeline, picked.id)
+  })
+
+  // One-click resolution for an ambiguous review: the author picks which of
+  // the structurally valid locations is the one they actually reviewed, and
+  // a replacement record (same comment, freshly captured location identity)
+  // supersedes the ambiguous one.
+  reg2('vouch.resolveAmbiguous', async (arg?: unknown) => {
+    const recordId = typeof arg === 'string' ? arg : undefined
+    if (!recordId) return
+    const found = findRecord(ctx, recordId)
+    if (!found) { void vscode.window.showWarningMessage('Vouch: record not found.'); return }
+    const { rootDir, sourcePath } = found
+    const author = await resolveAuthor(extCtx, rootDir)
+    if (!author) return
+    if (normalizeEmail(found.record.author.email) !== normalizeEmail(author.email)) {
+      void vscode.window.showInformationMessage(
+        `Vouch: only ${found.record.author.name} can resolve this review - ` +
+        're-review the code yourself instead.')
+      return
+    }
+    let doc: vscode.TextDocument
+    try {
+      doc = await vscode.workspace.openTextDocument(
+        vscode.Uri.file(path.join(rootDir, sourcePath)))
+    } catch {
+      void vscode.window.showWarningMessage(`Vouch: ${sourcePath} not found.`)
+      return
+    }
+    const editor = await vscode.window.showTextDocument(doc, { preview: false })
+    const status = await pipeline.statusFor(doc)
+    const entry = status.entries.find(e => e.record.id === recordId)
+    const candidates = entry?.res.status === 'ambiguous' ? entry.res.candidates ?? [] : []
+    if (!entry || candidates.length === 0) {
+      void vscode.window.showInformationMessage('Vouch: this review is not ambiguous here anymore.')
+      return
+    }
+
+    const docLines = splitLines(doc.getText())
+    type Item = vscode.QuickPickItem & { range: [number, number] }
+    const items: Item[] = candidates.map(([s, e]) => ({
+      label: `L${s}-${e}`,
+      description: (docLines[s - 1] ?? '').trim().slice(0, 80),
+      range: [s, e],
+    }))
+    const picked = await new Promise<Item | undefined>(resolve => {
+      const qp = vscode.window.createQuickPick<Item>()
+      qp.items = items
+      qp.placeholder = `Vouch: ${candidates.length} identical matches - pick the one you reviewed`
+      qp.onDidChangeActive(active => {
+        const it = active[0]
+        if (!it) return
+        const range = new vscode.Range(it.range[0] - 1, 0, it.range[1] - 1, 0)
+        editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport)
+        editor.selection = new vscode.Selection(range.start, range.end)
+      })
+      qp.onDidAccept(() => { resolve(qp.selectedItems[0]); qp.hide() })
+      qp.onDidHide(() => { resolve(undefined); qp.dispose() })
+      qp.show()
+    })
+    if (!picked) return
+
+    // Write-time guard: the buffer may have changed while the picker was
+    // open, and the candidate ranges came from a possibly-stale pipeline
+    // pass. Every legitimate candidate's window hashes to the record's own
+    // content hash, so one check closes both races.
+    const finalText = doc.getText()
+    if (hashRangeOfText(finalText, picked.range).hash !== found.record.hash) {
+      void vscode.window.showWarningMessage(
+        'Vouch: the file changed while the dialog was open - resolve again.')
+      refresh()
+      return
+    }
+    const symbols = await documentSymbols(doc.uri)
+    let symbol: string | undefined
+    let anchorSymbol: string | undefined
+    if (found.record.kind === 'function' || found.record.kind === 'class') {
+      symbol = (symbols
+        ? enclosingSymbolOfRange(symbols, picked.range, found.record.kind)?.path : undefined)
+        ?? found.record.symbol
+    } else if (found.record.kind === 'selection') {
+      anchorSymbol = symbols
+        ? enclosingSymbolOfRange(symbols, picked.range, 'any')?.path ?? '' : undefined
+    }
+    const commit = (await headSha(rootDir)) ?? ''
+    const dirty = commit ? await isDirty(rootDir, sourcePath) : false
+    const finalExisting = currentResolved(ctx, rootDir, sourcePath, finalText)
+    const rec = buildRecord({
+      id: randomUUID(), author, createdAt: new Date().toISOString(),
+      commit, dirty, kind: found.record.kind, symbol, anchorSymbol,
+      range: picked.range, docText: finalText,
+      comment: found.record.comment,
+      supersedeId: recordId,
+      existingCurrent: finalExisting,
+    })
+    try {
+      await appendLine(rootDir, sourcePath, authorSlug(author.email), rec)
+    } catch (err) {
+      void vscode.window.showErrorMessage(`Vouch: failed to write review — ${String(err)}`)
+      return
+    }
+    await ctx.reload()
+    refresh()
+  })
   reg2('vouch.openCommitOnWeb', async (recordId: string) => {
     const found = findRecord(ctx, recordId)
     if (!found?.record.commit) {
