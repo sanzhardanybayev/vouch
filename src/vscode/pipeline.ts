@@ -4,6 +4,7 @@ import { fileCoverage, type FileCoverage } from '../core/coverage'
 import type { ReviewRecord } from '../core/types'
 import type { VouchContext } from './context'
 import { documentSymbols } from './symbols'
+import { logError } from './log'
 
 export interface FileStatus {
   entries: { record: ReviewRecord; res: Resolution }[]
@@ -31,7 +32,7 @@ export class StatusPipeline {
     for (const ed of vscode.window.visibleTextEditors) {
       void this.statusFor(ed.document)
         .then(() => this.emitter.fire(ed.document.uri))
-        .catch(() => {})
+        .catch(e => logError('pipeline.refreshVisible', e))
     }
   }
 
@@ -43,7 +44,7 @@ export class StatusPipeline {
       this.timers.delete(key)
       void this.statusFor(doc)
         .then(() => this.emitter.fire(doc.uri))
-        .catch(() => {})
+        .catch(e => logError('pipeline.schedule', e))
     }, 300))
   }
 
@@ -89,7 +90,8 @@ export class StatusPipeline {
         if (this.retried.size > 200) this.retried.clear()
         setTimeout(() => {
           if (doc.version === versionAtStart && this.gen === genAtStart) {
-            void this.statusFor(doc).then(() => this.emitter.fire(doc.uri)).catch(() => {})
+            void this.statusFor(doc).then(() => this.emitter.fire(doc.uri))
+              .catch(e => logError('pipeline.symbolRetry', e))
           }
         }, 2000)
       }

@@ -249,10 +249,15 @@ export function registerCommands(
     extCtx.subscriptions.push(vscode.commands.registerCommand(id, fn))
   }
   reg('vouch.init', async () => {
-    const st = await editorState(ctx)
-    const rootDir = st?.rootDir ?? ctx.roots[0]?.rootDir
+    const editor = vscode.window.activeTextEditor
+    const rootDir = (editor && ctx.rootFor(editor.document.uri)?.rootDir) ?? ctx.roots[0]?.rootDir
     if (!rootDir) return
     await initVouch(rootDir)
+    // Flip the root live deterministically: init creates no .jsonl, so no
+    // watcher will fire for it — the reload's onDidChange lets the sidebar
+    // pick up the new .vouch/ dir and start its tracked-file scan.
+    await ctx.reload()
+    refresh()
     void vscode.window.showInformationMessage(`Vouch: initialized in ${rootDir}`)
   })
   // The optional argument threads an explicit supersede target from the

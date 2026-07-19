@@ -22,6 +22,21 @@ function canon(p: string): string {
   }
 }
 
+async function workspaceRootDirs(): Promise<Set<string>> {
+  const dirs = new Set<string>()
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    const raw = (await repoRoot(folder.uri.fsPath)) ?? folder.uri.fsPath
+    let rootDir: string
+    try {
+      rootDir = await fs.promises.realpath(raw)
+    } catch {
+      rootDir = raw
+    }
+    dirs.add(rootDir)
+  }
+  return dirs
+}
+
 export class VouchContext {
   private readonly emitter = new vscode.EventEmitter<void>()
   readonly onDidChange = this.emitter.event
@@ -29,24 +44,30 @@ export class VouchContext {
   private constructor(readonly roots: RootEntry[]) {}
 
   static async create(): Promise<VouchContext> {
-    const dirs = new Set<string>()
-    for (const folder of vscode.workspace.workspaceFolders ?? []) {
-      const raw = (await repoRoot(folder.uri.fsPath)) ?? folder.uri.fsPath
-      let rootDir: string
-      try {
-        rootDir = await fs.promises.realpath(raw)
-      } catch {
-        rootDir = raw
-      }
-      dirs.add(rootDir)
-    }
     const roots: RootEntry[] = []
-    for (const rootDir of dirs) {
+    for (const rootDir of await workspaceRootDirs()) {
       const store = new ReviewStore(rootDir)
       await store.load()
       roots.push({ rootDir, store })
     }
     return new VouchContext(roots)
+  }
+
+  // Workspace folders can change without an extension-host restart; recompute
+  // the root set in place (the array identity is captured everywhere) so a
+  // folder added later is not permanently "outside the workspace".
+  async rebuildRoots(): Promise<void> {
+    const dirs = await workspaceRootDirs()
+    const next: RootEntry[] = []
+    for (const rootDir of dirs) {
+      const existing = this.roots.find(r => r.rootDir === rootDir)
+      if (existing) { next.push(existing); continue }
+      const store = new ReviewStore(rootDir)
+      await store.load()
+      next.push({ rootDir, store })
+    }
+    this.roots.splice(0, this.roots.length, ...next)
+    this.emitter.fire()
   }
 
   rootFor(uri: vscode.Uri): RootEntry | null {
