@@ -80,7 +80,12 @@ export interface LineIndex { lines: string[]; lineHashes: string[] | null }
 
 export function buildLineIndex(docText: string): LineIndex {
   const lines = splitLines(docText)
-  const lineHashes = lines.length <= HUGE_FILE_LINES ? lines.map(l => sha256(l)) : null
+  // Gate on REAL line count: splitLines keeps the trailing empty segment of a
+  // newline-terminated file, and a boundary file must not silently lose the
+  // full scan (bounded path would false-dismiss ordinary insert-above edits).
+  const realLines = lines.length > 1 && lines[lines.length - 1] === ''
+    ? lines.length - 1 : lines.length
+  const lineHashes = realLines <= HUGE_FILE_LINES ? lines.map(l => sha256(l)) : null
   return { lines, lineHashes }
 }
 
@@ -204,10 +209,27 @@ export function resolveRecord(
         const matches = resolveSymbolPathAll(symbols, locSym)
         if (matches.length === 0) return ambiguousAt(candidates) // renamed/deleted: orphaned
         if (matches.length > 1) {
-          // Duplicate symbol names: location unverifiable; only a unique ctx
-          // survivor may still resolve.
-          const surv = hasCtx ? candidates.filter(ctxOk) : []
-          return surv.length === 1 ? reviewedAt(surv[0]!) : ambiguousAt(candidates)
+          // Duplicate symbol names (overloads, class+interface merging):
+          // WHICH occurrence was reviewed is unverifiable, but the hard
+          // containment test still applies. First accept the same airtight
+          // shape the symbols===null branch below greens - a complete scan
+          // proving a single candidate exactly at the stored range with ctx
+          // not contradicting - so 0.0.2 records over overloaded functions
+          // don't regress from green to amber on untouched code.
+          if (complete && candidates.length === 1 && atStored(candidates[0]!) &&
+            (!hasCtx || ctxOk(candidates[0]!))) {
+            return reviewedAt(candidates[0]!)
+          }
+          // Otherwise only candidates inside SOME occurrence may resolve; a
+          // ctx survivor OUTSIDE every occurrence would be a green the
+          // symbol signal affirmatively contradicts.
+          const insideAny = candidates.filter(i =>
+            matches.some(m => i + 1 >= m.range[0] && i + len <= m.range[1]))
+          if (insideAny.length === 0) {
+            return complete ? dismissedAt(stored, lines) : ambiguousAt(candidates)
+          }
+          const surv = hasCtx ? insideAny.filter(ctxOk) : []
+          return surv.length === 1 ? reviewedAt(surv[0]!) : ambiguousAt(insideAny)
         }
         const [ss, se] = matches[0]!.range
         const inside = candidates.filter(i => i + 1 >= ss && i + len <= se)

@@ -28,7 +28,7 @@ describe('codeLensTitle', () => {
     expect(codeLensTitle([
       { authorName: 'San', status: 'reviewed', createdAt: NOW },
       { authorName: 'San', status: 'ambiguous', createdAt: NOW },
-    ], NOW)).toBe('? Ambiguous (matches multiple locations) - resolve')
+    ], NOW)).toBe('? Ambiguous (location cannot be verified) - resolve')
   })
 
   it('dismissed still wins over ambiguous', () => {

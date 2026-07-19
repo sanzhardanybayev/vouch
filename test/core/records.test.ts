@@ -300,3 +300,22 @@ describe('resolveChains — topology', () => {
     expect(isTombstone(rec('a', '2026-01-01T00:00:00Z'))).toBe(false)
   })
 })
+
+describe('resolveChains — revocation cannot be vetoed by foreign records', () => {
+  it('a cross-author record unioned via an absent ancestor id does not disable my tombstone', () => {
+    // A0 absent (e.g. destroyed by a crafted id collision); my A1 supersedes it,
+    // attacker record C (other author) also names it. My unvouch of A1 must hold.
+    const a1 = rec('A1', '2026-01-02T00:00:00Z', { supersedes: ['A0'] })
+    const c = rec('C', '2026-01-03T00:00:00Z', { author: OTHER, supersedes: ['A0'] })
+    const t = tomb('t', 'A1')
+    const s = resolveChains([a1, c, t])
+    expect(s.current.map(r => r.id)).not.toContain('A1')
+  })
+
+  it('my tombstone never kills a foreign record sharing the chain', () => {
+    const a1 = rec('A1', '2026-01-02T00:00:00Z', { supersedes: ['A0'] })
+    const c = rec('C', '2026-01-03T00:00:00Z', { author: OTHER, supersedes: ['A0'] })
+    const s = resolveChains([a1, c, tomb('t', 'A1')])
+    expect(s.current.map(r => r.id)).toContain('C')
+  })
+})

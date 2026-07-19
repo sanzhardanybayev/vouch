@@ -57,3 +57,18 @@ describe('aggregateEngineers (multi-root)', () => {
     expect(aggregateEngineers<{ id: string }>([], () => [])).toEqual([])
   })
 })
+
+describe('aggregateEngineers — identity normalization across roots', () => {
+  it('merges case-differing emails from different roots into one reviewer', () => {
+    const rootA = { id: 'A' }
+    const rootB = { id: 'B' }
+    const out = aggregateEngineers([rootA, rootB], root => root === rootA
+      ? [{ name: 'Alice', email: 'Alice@Example.com', reviewCount: 2,
+          files: [{ sourcePath: 'a.ts', count: 2 }] }]
+      : [{ name: 'Alice', email: 'alice@example.com', reviewCount: 1,
+          files: [{ sourcePath: 'b.ts', count: 1 }] }])
+    expect(out).toHaveLength(1)
+    expect(out[0]!.reviewCount).toBe(3)
+    expect(out[0]!.files).toHaveLength(2)
+  })
+})

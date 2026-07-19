@@ -43,7 +43,7 @@ describe('rangeHoverMd', () => {
   it('ambiguous gets its own label and a Resolve command link', () => {
     const md = rangeHoverMd([{ authorName: 'San', status: 'ambiguous',
       createdAt: NOW, commit: '', commitLink: null, recordId: 'r1' }], NOW)
-    expect(md).toContain('? ambiguous (matches multiple locations)')
+    expect(md).toContain('? ambiguous (location cannot be verified)')
     expect(md).toContain(`command:vouch.resolveAmbiguous?${encodeURIComponent(JSON.stringify(['r1']))}`)
   })
 

@@ -13,7 +13,7 @@ export function codeLensTitle(entries: LensEntry[], nowIso: string): string {
     return '⚠ Dismissed (changed since review) — re-review'
   }
   if (entries.some(e => e.status === 'ambiguous')) {
-    return '? Ambiguous (matches multiple locations) - resolve'
+    return '? Ambiguous (location cannot be verified) - resolve'
   }
   const mostRecent = entries.reduce((a, b) => (b.createdAt > a.createdAt ? b : a))
   const when = relTime(mostRecent.createdAt, nowIso)

@@ -25,7 +25,7 @@ export function relTime(fromIso: string, toIso: string): string {
 
 function statusLabel(status: Status): string {
   if (status === 'reviewed') return '✓ reviewed'
-  if (status === 'ambiguous') return '? ambiguous (matches multiple locations)'
+  if (status === 'ambiguous') return '? ambiguous (location cannot be verified)'
   return '⚠ dismissed (changed since review)'
 }
 

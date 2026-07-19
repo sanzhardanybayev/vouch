@@ -189,28 +189,41 @@ export function resolveChains(all: VouchLine[], movedIndex?: MovedIndex): ChainS
       normalizeEmail(c.email) === normalizeEmail(target.author.email) && c.hash === target.hash)
   }
 
-  const revokedChains = new Set<string>()
+  // Revocation is per-author-partition, never per whole chain: a foreign
+  // record that lands in the chain (e.g. by naming the same absent ancestor
+  // id) must not be able to veto the author's own tombstone - and a
+  // tombstone must never kill records the tombstone author doesn't own.
+  const revokedIds = new Set<string>()
   for (const t of tombs) {
     if (!parent.has(t.revokes)) continue
     const root = find(t.revokes)
     const members = chains.get(root) ?? []
     if (members.length === 0) continue
-    const ownChain = members.every(m => sameAuthor(m.author, t.author))
-    if (ownChain || movedVerified(t)) revokedChains.add(root)
+    if (movedVerified(t)) {
+      for (const m of members) revokedIds.add(m.id)
+      continue
+    }
+    for (const m of members) {
+      if (sameAuthor(m.author, t.author)) revokedIds.add(m.id)
+    }
   }
 
   const chainOf = new Map<string, string>()
   const current: ReviewRecord[] = []
+  const revokedChains = new Set<string>()
   for (const [root, members] of chains) {
     members.sort((a, b) =>
       parsedTime(a.createdAt) - parsedTime(b.createdAt) || (a.id < b.id ? -1 : 1))
     for (const m of members) chainOf.set(m.id, root)
-    if (revokedChains.has(root)) continue
-    // Tips: not superseded by any present same-author record. A hand-made
-    // cycle (only producible by edited data) yields zero tips; treat all
-    // members as co-tips so an unrevoked chain never silently vanishes.
-    let tips = members.filter(m => !superseded.has(m.id))
-    if (tips.length === 0) tips = members
+    if (members.every(m => revokedIds.has(m.id))) revokedChains.add(root)
+    // Tips: alive members not superseded by any present same-author record.
+    // A hand-made cycle (only producible by edited data) yields zero
+    // unsuperseded tips; fall back to all alive members so an unrevoked
+    // chain never silently vanishes.
+    const alive = members.filter(m => !revokedIds.has(m.id))
+    if (alive.length === 0) continue
+    let tips = alive.filter(m => !superseded.has(m.id))
+    if (tips.length === 0) tips = alive
     current.push(tips[tips.length - 1]!)
   }
 

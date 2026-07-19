@@ -312,3 +312,47 @@ describe('buildLineIndex', () => {
     expect(resolveRecord(r, DOC, null, idx)).toEqual(resolveRecord(r, DOC))
   })
 })
+
+describe('resolveRecord — duplicate symbol names (hard containment)', () => {
+  // two same-named symbols; the reviewed text + neighborhood cut-pasted OUTSIDE both
+  const DOC3 = ['function fn() {', '  a()', '}', 'function fn() {', '  b()', '}',
+    'pad', '  SECRET', 'pad2'].join('\n')
+  const DUP_SYMS: SymbolNode[] = [
+    sym('fn', 'function', [1, 3]),
+    sym('fn', 'function', [4, 6]),
+  ]
+
+  it('a ctx survivor OUTSIDE every occurrence of the symbol never resolves reviewed', () => {
+    // capture pretends the text was once inside fn; now it exists only at L8
+    const { hash, headHash } = hashRangeOfText(DOC3, [8, 8])
+    const { before, after } = ctxHashes(splitLines(DOC3), [8, 8])
+    const r: ReviewRecord = { id: 'r1', author: { name: 'S', email: 's@x.com' },
+      createdAt: '2026-01-01T00:00:00Z', commit: 'c', dirty: false, kind: 'selection',
+      range: [2, 2], hash, headHash, anchorSymbol: 'fn', ctxBefore: before, ctxAfter: after }
+    const res = resolveRecord(r, DOC3, DUP_SYMS)
+    expect(res.status).not.toBe('reviewed')
+  })
+
+  it('legacy record (no ctx) intact at stored range, unique in file → reviewed despite duplicate names', () => {
+    const doc = ['function add() {', '  impl()', '}', 'function add() {', '  other()', '}'].join('\n')
+    const dupSyms = [sym('add', 'function', [1, 3]), sym('add', 'function', [4, 6])]
+    const r = recFor(doc, [2, 2], { anchorSymbol: 'add' })
+    expect(resolveRecord(r, doc, dupSyms)).toEqual({ status: 'reviewed', effectiveRange: [2, 2] })
+  })
+})
+
+describe('buildLineIndex — scan-cap boundary', () => {
+  it('a newline-terminated file of exactly HUGE_FILE_LINES real lines still gets the full scan', () => {
+    // trailing empty segment must not count toward the cap
+    const doc = Array.from({ length: HUGE_FILE_LINES }, (_, i) => `line ${i}`).join('\n') + '\n'
+    expect(buildLineIndex(doc).lineHashes).not.toBeNull()
+  })
+
+  it('an untouched review in a file that stays at the cap after an insert is followed, not dismissed', () => {
+    // 99,999 real lines; after inserting one at the top the current text has
+    // exactly HUGE_FILE_LINES real lines → still the complete scan path.
+    const base = Array.from({ length: HUGE_FILE_LINES - 1 }, (_, i) => `line ${i}`).join('\n')
+    const r = recWithCtx(base, [50, 52])
+    expect(resolveRecord(r, 'inserted\n' + base)).toEqual({ status: 'reviewed', effectiveRange: [51, 53] })
+  })
+})
