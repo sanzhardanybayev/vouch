@@ -13,7 +13,7 @@ Writing code got cheap. A human actually reading it and vouching for it did not.
 [![License: MIT](https://img.shields.io/github/license/sanzhardanybayev/vouch?color=blue)](LICENSE)
 [![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.85-007ACC?logo=visualstudiocode&logoColor=white)](https://code.visualstudio.com/)
 [![Cursor](https://img.shields.io/badge/Cursor-compatible-000000?logo=cursor&logoColor=white)](https://cursor.com/)
-[![Tests](https://img.shields.io/badge/tests-258%20passing-brightgreen)](#development)
+[![Tests](https://img.shields.io/badge/tests-265%20passing-brightgreen)](#development)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](#contributing)
 
@@ -213,7 +213,7 @@ npm run package      # build + produce vouch-review-coverage-0.0.1.vsix
 npm run watch        # rebuild on change while developing
 ```
 
-Press **F5** in VS Code to launch an Extension Development Host with Vouch loaded. Requires Node 18+ and git on `PATH`. The full test suite (unit + integration) must stay green.
+Press **F5** in VS Code to launch an Extension Development Host with Vouch loaded. Requires Node 18+ and git on `PATH`. The test suite is **265 tests** (257 unit + 8 integration) and must stay green.
 
 ## Roadmap / Limitations
 
