@@ -84,10 +84,17 @@ async function attest(
   // it, never to whatever the buffer holds after the dialogs.
   const snapshotText = doc.getText()
   const snapshotVersion = doc.version
-  const snapshotSymbols = await documentSymbols(doc.uri)
-  // captureAnchorSymbol / enclosingSymbol below intersect snapshot-coordinate
-  // ranges with a symbol tree; if an external edit landed during the await,
-  // those coordinates no longer describe the same code. Bail before writing
+  let snapshotSymbols = await documentSymbols(doc.uri)
+  // One short retry covers a still-warming language server, so a review taken
+  // right after opening a file still gets its location anchor instead of
+  // falling back to a content-only record.
+  if (!snapshotSymbols) {
+    await new Promise(r => setTimeout(r, 300))
+    snapshotSymbols = await documentSymbols(doc.uri)
+  }
+  // enclosingSymbol below intersects snapshot-coordinate ranges with this
+  // symbol tree; if an external edit landed during the awaits, those
+  // coordinates no longer describe the same code. Bail before writing
   // anything derived from a stale pairing.
   if (doc.version !== snapshotVersion) {
     void vscode.window.showWarningMessage(

@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { resolveRecord } from '../core/anchor'
+import { isKnownKind } from '../core/records'
 import { commitUrl } from '../core/giturl'
 import { isValidSha } from '../core/hovermd'
 import { timelineHtml, type TimelineInput, type TimelineEntry } from '../core/timelinehtml'
@@ -36,7 +37,9 @@ async function buildInput(
       return pipelineEntries.find(e => e.record.id === id)?.res.status ?? 'historical'
     }
     const rec = state.current.find(r => r.id === id)
-    return rec && docText !== '' ? resolveRecord(rec, docText).status : 'historical'
+    // Unknown future kinds resolve 'dismissed', which would falsely read as
+    // "changed since review"; show them as historical like every other surface.
+    return rec && isKnownKind(rec) && docText !== '' ? resolveRecord(rec, docText).status : 'historical'
   }
 
   const currentIds = new Set(state.current.map(r => r.id))
