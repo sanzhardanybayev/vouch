@@ -50,3 +50,14 @@ describe('rollup with unreviewed entries (v1.1)', () => {
       .toEqual({ reviewedLines: 3, totalLines: 10 })
   })
 })
+
+describe('pct — honest edges', () => {
+  it('100 only when every line is reviewed', () => {
+    expect(pct({ reviewedLines: 1999, totalLines: 2000 })).toBe(99)
+    expect(pct({ reviewedLines: 2000, totalLines: 2000 })).toBe(100)
+  })
+  it('0 only when nothing is reviewed', () => {
+    expect(pct({ reviewedLines: 1, totalLines: 2000 })).toBe(1)
+    expect(pct({ reviewedLines: 0, totalLines: 2000 })).toBe(0)
+  })
+})

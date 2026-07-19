@@ -35,6 +35,11 @@ export function rollup(children: (FileCoverage | null)[]): FileCoverage | null {
   return any ? { reviewedLines, totalLines } : null
 }
 
+// Honest at the edges: 100 only when every line is reviewed, 0 only when
+// none is — a rounded 99.96% must not display as the green-mark-never-lies
+// hundred, and one reviewed line is not "0%".
 export function pct(c: FileCoverage): number {
-  return Math.round((100 * c.reviewedLines) / c.totalLines)
+  if (c.reviewedLines >= c.totalLines) return 100
+  if (c.reviewedLines <= 0) return 0
+  return Math.min(99, Math.max(1, Math.round((100 * c.reviewedLines) / c.totalLines)))
 }

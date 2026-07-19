@@ -24,7 +24,9 @@ export async function initVouch(rootDir: string): Promise<void> {
   const attrPath = join(rootDir, '.gitattributes')
   let attrs = ''
   try { attrs = await readFile(attrPath, 'utf8') } catch { /* absent */ }
-  if (!attrs.split('\n').includes(ATTR_LINE)) {
+  // Split on \r?\n and trim: a CRLF .gitattributes must not accrete a
+  // duplicate line on every init.
+  if (!attrs.split(/\r?\n/).some(l => l.trim() === ATTR_LINE)) {
     const sep = attrs === '' || attrs.endsWith('\n') ? '' : '\n'
     await writeFile(attrPath, attrs + sep + ATTR_LINE + '\n', 'utf8')
   }
