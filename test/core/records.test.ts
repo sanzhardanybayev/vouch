@@ -318,4 +318,23 @@ describe('resolveChains — revocation cannot be vetoed by foreign records', () 
     const s = resolveChains([a1, c, tomb('t', 'A1')])
     expect(s.current.map(r => r.id)).toContain('C')
   })
+
+  it('two authors unioned via a shared absent ancestor both stay current, regardless of createdAt', () => {
+    const mine = rec('A1', '2026-01-02T00:00:00Z', { supersedes: ['A0'] })
+    const later = rec('C', '9999-01-01T00:00:00Z', { author: OTHER, supersedes: ['A0'] })
+    const earlier = rec('C', '2000-01-01T00:00:00Z', { author: OTHER, supersedes: ['A0'] })
+    for (const foreign of [later, earlier]) {
+      const s = resolveChains([mine, foreign])
+      expect(s.chains.size).toBe(1)
+      expect(s.current.map(r => r.id).sort()).toEqual(['A1', 'C'])
+    }
+  })
+
+  it('per-author tips: each author\'s own supersede lineage still resolves inside a shared chain', () => {
+    const mineOld = rec('A1', '2026-01-01T00:00:00Z', { supersedes: ['A0'] })
+    const mineNew = rec('A2', '2026-01-02T00:00:00Z', { supersedes: ['A1'] })
+    const theirs = rec('C', '9999-01-01T00:00:00Z', { author: OTHER, supersedes: ['A0'] })
+    const s = resolveChains([mineOld, mineNew, theirs])
+    expect(s.current.map(r => r.id).sort()).toEqual(['A2', 'C'])
+  })
 })

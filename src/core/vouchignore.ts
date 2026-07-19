@@ -3,10 +3,11 @@
 // counts, reviewer stats, orphans). Editor surfaces stay unfiltered.
 //
 // Supported per line: blank lines and # comments; `*` (within a segment),
-// `**` (across segments), `?` (one non-slash char); a leading `/` anchors to
-// the repo root; a trailing `/` matches the directory's whole subtree; a
-// leading `!` re-includes, with last-match-wins semantics like gitignore.
-// No runtime dependencies by design.
+// `**` (across segments), `?` (one non-slash char); any non-trailing `/`
+// anchors the pattern to the repo root (gitignore semantics - only a bare
+// name or trailing-slash dir name matches at any depth); a trailing `/`
+// matches the directory's whole subtree; a leading `!` re-includes, with
+// last-match-wins semantics like gitignore. No runtime dependencies by design.
 
 export interface VouchIgnore {
   ignores(sourcePath: string): boolean
@@ -28,6 +29,9 @@ function patternToRegex(pattern: string): RegExp {
   const anchored = pattern.startsWith('/')
   const dirOnly = pattern.endsWith('/')
   let body = pattern.replace(/^\//, '').replace(/\/$/, '')
+  // Only a pattern with no non-trailing separator matches at any depth, like
+  // gitignore: `dist` hits `a/b/dist`, but `docs/*.md` is root-anchored.
+  const rooted = anchored || body.includes('/')
 
   // `**` handling: split on '/' and translate segment by segment so `*` and
   // `?` can never cross a directory boundary. The '**' sentinel is '\x00'
@@ -41,9 +45,7 @@ function patternToRegex(pattern: string): RegExp {
     .replace(/\/\x00/g, '(?:/[^/]+)*')
     .replace(/\x00/g, '.*')
 
-  // Unanchored single-segment-start patterns match at any depth, like
-  // gitignore: `dist` hits `a/b/dist`.
-  const prefix = anchored ? '^' : '^(?:[^/]+/)*'
+  const prefix = rooted ? '^' : '^(?:[^/]+/)*'
   // A directory pattern owns its subtree; a file pattern may also name a
   // directory (gitignore semantics: `dist` ignores the dir and everything in it).
   const suffix = dirOnly ? '/.*$' : '(?:/.*)?$'

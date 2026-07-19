@@ -190,6 +190,7 @@ async function attest(
   // reviewed content itself was edited away or duplicated, abort: a record
   // must never attest to text the user did not read.
   const finalDocText = doc.getText()
+  const finalVersion = doc.version
   let finalRange = range
   if (kind === 'file') {
     if (normalizeEol(finalDocText) !== normalizeEol(snapshotText)) {
@@ -211,6 +212,13 @@ async function attest(
   // elsewhere and silently revoke it. Symbols recomputed on the final text
   // (the buffer may have shifted since the snapshot).
   const finalSymbols = await documentSymbols(doc.uri)
+  // Symbols are computed from the live buffer; if it moved during the await,
+  // finalDocText and the symbol tree describe different states.
+  if (doc.version !== finalVersion) {
+    void vscode.window.showWarningMessage(
+      'Vouch: the file changed while the dialog was open - review it again.')
+    return
+  }
   const finalExisting = currentResolved(ctx, rootDir, sourcePath, finalDocText, finalSymbols)
 
   const rec = buildRecord({
@@ -428,6 +436,7 @@ export function registerCommands(
       range: picked.range, docText: finalText,
       comment: found.record.comment,
       supersedeId: recordId,
+      explicitSupersedeOnly: true,
       existingCurrent: finalExisting,
     })
     try {
@@ -502,7 +511,7 @@ export function registerCommands(
       ? resolved.find(e => e.record.id === recordId)
       : resolved.find(actionable)
     if (!target) {
-      void vscode.window.showInformationMessage('Vouch: no dismissed review of yours here.')
+      void vscode.window.showInformationMessage('Vouch: no dismissed or ambiguous review of yours here.')
       return
     }
 

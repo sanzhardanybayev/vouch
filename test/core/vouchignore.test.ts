@@ -67,6 +67,21 @@ describe('compileVouchIgnore', () => {
     expect(flipped.ignores('vendor/keep.ts')).toBe(true) // later rule wins
   })
 
+  it('a pattern with an internal slash is anchored to the repo root', () => {
+    const ig = m('docs/*.md')
+    expect(ig.ignores('docs/a.md')).toBe(true)
+    expect(ig.ignores('packages/x/docs/a.md')).toBe(false)
+    const deep = m('a/b/')
+    expect(deep.ignores('a/b/c.ts')).toBe(true)
+    expect(deep.ignores('x/a/b/c.ts')).toBe(false)
+  })
+
+  it('a leading ** keeps a slash-containing pattern matching at any depth', () => {
+    const ig = m('**/docs/*.md')
+    expect(ig.ignores('docs/a.md')).toBe(true)
+    expect(ig.ignores('packages/x/docs/a.md')).toBe(true)
+  })
+
   it('regex metacharacters in patterns are inert', () => {
     const ig = m('a+b(1).ts')
     expect(ig.ignores('a+b(1).ts')).toBe(true)

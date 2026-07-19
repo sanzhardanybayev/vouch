@@ -216,15 +216,27 @@ export function resolveChains(all: VouchLine[], movedIndex?: MovedIndex): ChainS
       parsedTime(a.createdAt) - parsedTime(b.createdAt) || (a.id < b.id ? -1 : 1))
     for (const m of members) chainOf.set(m.id, root)
     if (members.every(m => revokedIds.has(m.id))) revokedChains.add(root)
-    // Tips: alive members not superseded by any present same-author record.
-    // A hand-made cycle (only producible by edited data) yields zero
-    // unsuperseded tips; fall back to all alive members so an unrevoked
-    // chain never silently vanishes.
+    // Tips are selected per author partition: honored supersedes edges are
+    // same-author-only, so authors sharing a chain (via absent-ancestor
+    // unions) each own an independent lineage - a foreign record with a
+    // later (forgeable) createdAt must never displace another author's live
+    // review. Within a partition, a hand-made cycle (only producible by
+    // edited data) yields zero unsuperseded tips; fall back to all alive
+    // members so an unrevoked lineage never silently vanishes.
     const alive = members.filter(m => !revokedIds.has(m.id))
     if (alive.length === 0) continue
-    let tips = alive.filter(m => !superseded.has(m.id))
-    if (tips.length === 0) tips = alive
-    current.push(tips[tips.length - 1]!)
+    const byAuthor = new Map<string, ReviewRecord[]>()
+    for (const m of alive) {
+      const key = normalizeEmail(m.author.email)
+      const g = byAuthor.get(key) ?? []
+      g.push(m)
+      byAuthor.set(key, g)
+    }
+    for (const g of byAuthor.values()) {
+      let tips = g.filter(m => !superseded.has(m.id))
+      if (tips.length === 0) tips = g
+      current.push(tips[tips.length - 1]!)
+    }
   }
 
   return { current, chains, chainOf, revokedChains }
