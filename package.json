@@ -6,46 +6,131 @@
   "publisher": "sanzhardanybayev",
   "license": "MIT",
   "icon": "media/icon.png",
-  "repository": { "type": "git", "url": "https://github.com/sanzhardanybayev/vouch" },
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["Other"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sanzhardanybayev/vouch"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
   "main": "./dist/extension.js",
-  "activationEvents": ["onStartupFinished"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "commands": [
-      { "command": "vouch.init", "title": "Vouch: Initialize in workspace" },
-      { "command": "vouch.selection", "title": "Vouch: Review selected lines" },
-      { "command": "vouch.function", "title": "Vouch: Review enclosing function" },
-      { "command": "vouch.class", "title": "Vouch: Review enclosing class" },
-      { "command": "vouch.file", "title": "Vouch: Review entire file" },
-      { "command": "vouch.reReview", "title": "Vouch: Re-review (after dismissal)" },
-      { "command": "vouch.unvouch", "title": "Vouch: Revoke my review" },
-      { "command": "vouch.showDiff", "title": "Vouch: Diff since my review" },
-      { "command": "vouch.openCommitOnWeb", "title": "Vouch: Open review commit on web" },
-      { "command": "vouch.openTimeline", "title": "Vouch: Open review timeline" },
-      { "command": "vouch.reattach", "title": "Vouch: Re-attach orphaned reviews" },
-      { "command": "vouch.refresh", "title": "Vouch: Refresh reviews and coverage" }
+      {
+        "command": "vouch.init",
+        "title": "Vouch: Initialize in workspace"
+      },
+      {
+        "command": "vouch.selection",
+        "title": "Vouch: Review selected lines"
+      },
+      {
+        "command": "vouch.function",
+        "title": "Vouch: Review enclosing function"
+      },
+      {
+        "command": "vouch.class",
+        "title": "Vouch: Review enclosing class"
+      },
+      {
+        "command": "vouch.file",
+        "title": "Vouch: Review entire file"
+      },
+      {
+        "command": "vouch.reReview",
+        "title": "Vouch: Re-review (after dismissal)"
+      },
+      {
+        "command": "vouch.unvouch",
+        "title": "Vouch: Revoke my review"
+      },
+      {
+        "command": "vouch.showDiff",
+        "title": "Vouch: Diff since my review"
+      },
+      {
+        "command": "vouch.openCommitOnWeb",
+        "title": "Vouch: Open review commit on web"
+      },
+      {
+        "command": "vouch.openTimeline",
+        "title": "Vouch: Open review timeline"
+      },
+      {
+        "command": "vouch.reattach",
+        "title": "Vouch: Re-attach orphaned reviews"
+      },
+      {
+        "command": "vouch.refresh",
+        "title": "Vouch: Refresh reviews and coverage"
+      }
     ],
     "menus": {
       "editor/context": [
-        { "submenu": "vouch.menu", "group": "1_modification@9" }
+        {
+          "submenu": "vouch.menu",
+          "group": "1_modification@9"
+        }
       ],
       "vouch.menu": [
-        { "command": "vouch.selection", "group": "a@1" },
-        { "command": "vouch.function", "group": "a@2" },
-        { "command": "vouch.class", "group": "a@3" },
-        { "command": "vouch.file", "group": "a@4" },
-        { "command": "vouch.reReview", "group": "b@1" },
-        { "command": "vouch.unvouch", "group": "b@2" },
-        { "command": "vouch.showDiff", "group": "c@1" }
+        {
+          "command": "vouch.selection",
+          "group": "a@1"
+        },
+        {
+          "command": "vouch.function",
+          "group": "a@2"
+        },
+        {
+          "command": "vouch.class",
+          "group": "a@3"
+        },
+        {
+          "command": "vouch.file",
+          "group": "a@4"
+        },
+        {
+          "command": "vouch.reReview",
+          "group": "b@1"
+        },
+        {
+          "command": "vouch.unvouch",
+          "group": "b@2"
+        },
+        {
+          "command": "vouch.showDiff",
+          "group": "c@1"
+        }
       ]
     },
-    "submenus": [ { "id": "vouch.menu", "label": "Vouch" } ],
+    "submenus": [
+      {
+        "id": "vouch.menu",
+        "label": "Vouch"
+      }
+    ],
     "viewsContainers": {
-      "activitybar": [ { "id": "vouch", "title": "Vouch", "icon": "media/reviewed.svg" } ]
+      "activitybar": [
+        {
+          "id": "vouch",
+          "title": "Vouch",
+          "icon": "media/reviewed.svg"
+        }
+      ]
     },
     "views": {
-      "vouch": [ { "id": "vouch.coverage", "name": "Review Coverage" } ]
+      "vouch": [
+        {
+          "id": "vouch.coverage",
+          "name": "Review Coverage"
+        }
+      ]
     },
     "configuration": {
       "title": "Vouch",
@@ -69,18 +154,25 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:int": "npm run build && tsc -p tsconfig.int.json && node out-int/test/vscode-int/runTest.js",
+    "lint": "eslint src test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "package": "npm run build && vsce package --no-dependencies"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/mocha": "^10.0.6",
     "@types/node": "^18.19.0",
     "@types/vscode": "1.85.0",
     "@vscode/test-electron": "^2.3.9",
     "@vscode/vsce": "^2.24.0",
     "esbuild": "^0.20.0",
+    "eslint": "^10.7.0",
     "glob": "^10.3.0",
     "mocha": "^10.3.0",
+    "prettier": "^3.9.5",
     "typescript": "^5.4.0",
+    "typescript-eslint": "^8.64.0",
     "vitest": "^1.4.0"
   }
 }

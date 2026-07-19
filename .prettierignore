@@ -1,0 +1,9 @@
+dist/
+out/
+out-int/
+.vscode-test/
+.superpowers/
+node_modules/
+package-lock.json
+*.vsix
+CHANGELOG.md
