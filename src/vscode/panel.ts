@@ -76,15 +76,27 @@ export async function openTimeline(
   const panel = vscode.window.createWebviewPanel('vouchTimeline',
     `Vouch: ${sourcePath}`, vscode.ViewColumn.Beside, { enableScripts: true })
 
-  let renderQueued = false
+  // Coalesce, never drop: buildInput reads store state synchronously then
+  // awaits (git remoteUrl, pipeline). An event arriving mid-render must cause
+  // ONE more pass afterward so the panel reflects the latest store, not
+  // whatever was current when the in-flight pass started.
+  let disposed = false
+  let rendering = false
+  let renderPending = false
   const render = async (): Promise<void> => {
-    if (renderQueued) return
-    renderQueued = true
+    if (rendering) { renderPending = true; return }
+    rendering = true
     try {
-      const input = await buildInput(ctx, pipeline, rootDir, sourcePath)
-      if (input) panel.webview.html = timelineHtml(input, panel.webview.cspSource, randomUUID())
+      do {
+        renderPending = false
+        const input = await buildInput(ctx, pipeline, rootDir, sourcePath)
+        // The panel can be closed while we await; touching its webview then
+        // throws 'Webview is disposed'.
+        if (disposed) return
+        if (input) panel.webview.html = timelineHtml(input, panel.webview.cspSource, randomUUID())
+      } while (renderPending && !disposed)
     } finally {
-      renderQueued = false
+      rendering = false
     }
   }
 
@@ -98,7 +110,7 @@ export async function openTimeline(
       if (uri.scheme === 'file' && uri.fsPath === abs) void render()
     }),
   ]
-  panel.onDidDispose(() => { for (const l of listeners) l.dispose() })
+  panel.onDidDispose(() => { disposed = true; for (const l of listeners) l.dispose() })
 
   panel.webview.onDidReceiveMessage((msg: { cmd: string; recordId: string }) => {
     if (msg.cmd === 'reReview') void vscode.commands.executeCommand('vouch.reReview', msg.recordId)

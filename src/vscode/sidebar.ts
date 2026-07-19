@@ -9,6 +9,7 @@ import { buildTree, headerStats, type HeaderStats, type TreeFile, type TreeFolde
 import { aggregateEngineers } from '../core/engineers'
 import { shouldRequeue } from '../core/requeue'
 import { compileVouchIgnore, type VouchIgnore } from '../core/vouchignore'
+import { isKnownKind } from '../core/records'
 import type { VouchContext, RootEntry } from './context'
 import type { StatusPipeline } from './pipeline'
 import { lsFiles } from './gitinfo'
@@ -71,7 +72,27 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     fsWatcher.onDidCreate(scheduleFileListReload)
     fsWatcher.onDidDelete(scheduleFileListReload)
     subscriptions.push(fsWatcher, { dispose: () => { if (this.fsWatchTimer) clearTimeout(this.fsWatchTimer) } })
+    // .vouchignore's CONTENT is membership, so unlike source files its edits
+    // must reload. A per-root RelativePattern anchored at rootDir also fires
+    // when .vouch/.vouchignore live ABOVE a subfolder workspace, where the
+    // '**/*' watcher sees nothing.
+    this.buildIgnoreWatchers(scheduleFileListReload)
+    subscriptions.push(
+      ctx.onDidChange(() => this.buildIgnoreWatchers(scheduleFileListReload)),
+      { dispose: () => { for (const w of this.ignoreWatchers) w.dispose() } },
+    )
     void this.reloadFileLists().catch(err => logError('sidebar.initialLoad', err))
+  }
+
+  private ignoreWatchers: vscode.Disposable[] = []
+  private buildIgnoreWatchers(onChange: () => void): void {
+    for (const w of this.ignoreWatchers) w.dispose()
+    this.ignoreWatchers = this.ctx.roots.map(root => {
+      const w = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(vscode.Uri.file(root.rootDir), '.vouchignore'))
+      w.onDidCreate(onChange); w.onDidChange(onChange); w.onDidDelete(onChange)
+      return w
+    })
   }
 
   private coverageEnabled(): boolean {
@@ -89,7 +110,11 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
   // before repainting, otherwise the welcome node would sit there until the
   // next window reload.
   private async onCtxChange(): Promise<void> {
-    const stale = this.ctx.roots.some(r => this.rootLive(r) && !this.fileList.has(r.rootDir)) ||
+    // Symmetric staleness: liveness and fileList presence must agree in BOTH
+    // directions. not-live -> live (init/pull created .vouch/) needs a scan;
+    // live -> not-live (.vouch/ removed) must drop the stale list so the
+    // header stops counting a dead root. Plus roots that left the workspace.
+    const stale = this.ctx.roots.some(r => this.rootLive(r) !== this.fileList.has(r.rootDir)) ||
       [...this.fileList.keys()].some(dir => !this.ctx.roots.some(r => r.rootDir === dir))
     if (stale) {
       await this.loadFileLists().catch(err => logError('sidebar.onCtxChange', err))
@@ -104,7 +129,10 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
 
   private async loadFileLists(): Promise<void> {
     for (const dir of [...this.fileList.keys()]) {
-      if (!this.ctx.roots.some(r => r.rootDir === dir)) this.fileList.delete(dir)
+      if (!this.ctx.roots.some(r => r.rootDir === dir)) {
+        this.fileList.delete(dir)
+        this.truncated.delete(dir) // a removed root must not leave a stuck "(partial)"
+      }
     }
     for (const root of this.ctx.roots) {
       this.ignores.set(root.rootDir, this.loadIgnore(root))
@@ -113,24 +141,35 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
         this.truncated.delete(root.rootDir)
         continue
       }
-      const files = await lsFiles(root.rootDir)
-      const list = files.length > 0 ? files : await this.findFallback(root)
-      if (list.length > MAX_FILES) {
+      const gitFiles = await lsFiles(root.rootDir)
+      const { list, truncated: fallbackTruncated } = gitFiles.length > 0
+        ? { list: gitFiles, truncated: false } : await this.findFallback(root)
+      // Apply .vouchignore BEFORE the cap so the coverage UNIVERSE is the
+      // post-filter set: ignored files must not consume slots and push real
+      // files past the cap, and narrowing the universe below the cap must
+      // actually clear "(partial)".
+      const ig = this.ignores.get(root.rootDir)!
+      const kept = list.filter(p => !ig.ignores(p))
+      if (kept.length > MAX_FILES || fallbackTruncated) {
         this.truncated.add(root.rootDir)
         logError('sidebar.loadFileLists',
-          `${list.length} tracked files in ${root.rootDir}; coverage capped at ${MAX_FILES} (header shows "partial")`)
+          `${kept.length}${fallbackTruncated ? '+' : ''} files in ${root.rootDir}; ` +
+          `coverage capped at ${MAX_FILES} (header shows "partial")`)
       } else {
         this.truncated.delete(root.rootDir)
       }
-      const ig = this.ignores.get(root.rootDir)!
-      this.fileList.set(root.rootDir, list.slice(0, MAX_FILES).filter(p => !ig.ignores(p)))
+      this.fileList.set(root.rootDir, kept.slice(0, MAX_FILES))
     }
   }
 
   private loadIgnore(root: RootEntry): VouchIgnore {
     try {
       return compileVouchIgnore(fs.readFileSync(path.join(root.rootDir, '.vouchignore'), 'utf8'))
-    } catch {
+    } catch (err) {
+      // Absent is the normal case (silent); an unreadable-but-present
+      // .vouchignore (EACCES, EISDIR) would silently balloon the universe, so
+      // surface it. Fallback stays include-all either way.
+      if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') logError('sidebar.loadIgnore', err)
       return compileVouchIgnore('')
     }
   }
@@ -142,11 +181,16 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     return ig ? (p): boolean => !ig.ignores(p) : (): boolean => true
   }
 
-  private async findFallback(root: RootEntry): Promise<string[]> {
-    const uris = await vscode.workspace.findFiles('**/*', '**/node_modules/**', MAX_FILES)
-    return uris
+  private async findFallback(root: RootEntry): Promise<{ list: string[]; truncated: boolean }> {
+    // Query one past the cap so hitting it is detectable and can be surfaced
+    // as "(partial)" rather than silently presenting an incomplete denominator
+    // as the whole truth. The cap is workspace-wide, so any fallback root may
+    // be missing files once it's hit.
+    const uris = await vscode.workspace.findFiles('**/*', '**/node_modules/**', MAX_FILES + 1)
+    const list = uris
       .filter(u => isInsideRoot(root.rootDir, u.fsPath))
       .map(u => path.relative(root.rootDir, u.fsPath).split(path.sep).join('/'))
+    return { list, truncated: uris.length > MAX_FILES }
   }
 
   refresh(): void {
@@ -242,7 +286,7 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
         // takes the conservative rule; the shared index keeps the scan
         // linear across all of the file's records.
         const index = buildLineIndex(text)
-        const entries = state.current.map(record => ({
+        const entries = state.current.filter(isKnownKind).map(record => ({
           record, res: resolveRecord(record, text, null, index) }))
         this.covCache.set(abs, {
           mtimeMs: stat.mtimeMs, coverage: fileCoverage(entries, text), reviewed: true })

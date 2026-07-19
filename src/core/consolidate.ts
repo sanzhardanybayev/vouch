@@ -4,6 +4,7 @@ import type { ReviewRecord } from './types'
 export interface ConsolidationSummary {
   total: number
   dismissed: number
+  ambiguous: number
   withComments: number
 }
 
@@ -13,6 +14,7 @@ export function summarizeCandidates(
   return {
     total: candidates.length,
     dismissed: candidates.filter(c => c.res.status === 'dismissed').length,
+    ambiguous: candidates.filter(c => c.res.status === 'ambiguous').length,
     withComments: candidates.filter(c => c.record.comment).length,
   }
 }

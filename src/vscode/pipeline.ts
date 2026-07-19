@@ -1,6 +1,7 @@
 import * as vscode from 'vscode'
 import { buildLineIndex, resolveRecord, type Resolution } from '../core/anchor'
 import { fileCoverage, type FileCoverage } from '../core/coverage'
+import { isKnownKind } from '../core/records'
 import type { ReviewRecord } from '../core/types'
 import type { VouchContext } from './context'
 import { documentSymbols } from './symbols'
@@ -66,11 +67,16 @@ export class StatusPipeline {
     if (!state || state.current.length === 0) return empty
 
     const docText = doc.getText()
-    const needSymbols = state.current.some(r => (r.symbol ?? r.anchorSymbol) !== undefined)
+    // Records of a kind this client doesn't understand (written by a future
+    // Vouch version) stay in chain topology but never render - showing them
+    // as "dismissed (changed since review)" would be a lie about code that
+    // didn't change.
+    const shown = state.current.filter(isKnownKind)
+    const needSymbols = shown.some(r => (r.symbol ?? r.anchorSymbol) !== undefined)
     const symbols = needSymbols ? await documentSymbols(doc.uri) : null
 
     const index = buildLineIndex(docText)
-    const entries = state.current.map(record => (
+    const entries = shown.map(record => (
       { record, res: resolveRecord(record, docText, symbols, index) }))
     const status: FileStatus = { entries, coverage: fileCoverage(entries, docText) }
     // If the document or invalidation generation moved on while we were

@@ -4,9 +4,10 @@ import * as path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { buildRecord, buildReattachLines, overlaps, rebaseRange, supersedeCandidates } from '../core/attest'
 import { prefillComment, summarizeCandidates } from '../core/consolidate'
-import { enclosingSymbol, enclosingSymbolOfRange, hashRangeOfText, resolveRecord, resolveSymbolPath } from '../core/anchor'
+import { buildLineIndex, enclosingSymbol, enclosingSymbolOfRange, hashRangeOfText, resolveRecord, resolveSymbolPathAll, type SymbolNode } from '../core/anchor'
 import { normalizeEol, splitLines } from '../core/text'
 import { authorSlug, normalizeEmail } from '../core/paths'
+import { isKnownKind } from '../core/records'
 import { appendLine, initVouch } from '../core/writer'
 import type { Author, RecordKind, ReviewRecord, Tombstone } from '../core/types'
 import type { VouchContext } from './context'
@@ -52,30 +53,21 @@ async function editorState(ctx: VouchContext): Promise<{
   return { editor, rootDir: root.rootDir, sourcePath }
 }
 
+// Resolve a file's current records against given text. `symbols` MUST be the
+// same symbol input the visible surfaces use (documentSymbols(uri), or null
+// when unavailable) - resolving symbol-blind here would place a record at a
+// different location than the gutter shows and let a supersede/unvouch act on
+// the wrong one.
 export function currentResolved(
   ctx: VouchContext, rootDir: string, sourcePath: string, docText: string,
+  symbols: SymbolNode[] | null = null,
 ): { record: ReviewRecord; res: ReturnType<typeof resolveRecord> }[] {
   const root = ctx.roots.find(r => r.rootDir === rootDir)
   const state = root?.store.stateFor(sourcePath)
   if (!state) return []
-  return state.current.map(record => ({ record, res: resolveRecord(record, docText) }))
-}
-
-// The selection's enclosing function/class at review time, as location
-// identity for the record. One short retry covers a still-warming language
-// server; after that, null-from-provider means the record stays content-only
-// (a small, explicit unprotected class), while a provider that ran and found
-// no enclosing symbol yields the top-level sentinel ''.
-async function captureAnchorSymbol(
-  uri: vscode.Uri, range: [number, number],
-): Promise<string | undefined> {
-  let symbols = await documentSymbols(uri)
-  if (!symbols) {
-    await new Promise(r => setTimeout(r, 300))
-    symbols = await documentSymbols(uri)
-  }
-  if (!symbols) return undefined
-  return enclosingSymbolOfRange(symbols, range, 'any')?.path ?? ''
+  const index = buildLineIndex(docText)
+  return state.current.filter(isKnownKind)
+    .map(record => ({ record, res: resolveRecord(record, docText, symbols, index) }))
 }
 
 async function attest(
@@ -91,16 +83,27 @@ async function attest(
   // The snapshot is what the user actually read - the record must attest to
   // it, never to whatever the buffer holds after the dialogs.
   const snapshotText = doc.getText()
+  const snapshotVersion = doc.version
+  const snapshotSymbols = await documentSymbols(doc.uri)
+  // captureAnchorSymbol / enclosingSymbol below intersect snapshot-coordinate
+  // ranges with a symbol tree; if an external edit landed during the await,
+  // those coordinates no longer describe the same code. Bail before writing
+  // anything derived from a stale pairing.
+  if (doc.version !== snapshotVersion) {
+    void vscode.window.showWarningMessage(
+      'Vouch: the file changed while starting the review - try again.')
+    return
+  }
   let range: [number, number] | undefined
   let symbol: string | undefined
   let anchorSymbol: string | undefined
   if (kind === 'selection') {
     const sel = editor.selection
     range = [sel.start.line + 1, sel.end.line + 1]
-    anchorSymbol = await captureAnchorSymbol(doc.uri, range)
+    anchorSymbol = snapshotSymbols ? enclosingSymbolOfRange(snapshotSymbols, range, 'any')?.path ?? '' : undefined
   } else if (kind === 'function' || kind === 'class') {
-    const symbols = await documentSymbols(doc.uri)
-    const found = symbols ? enclosingSymbol(symbols, editor.selection.active.line + 1, kind) : null
+    const found = snapshotSymbols
+      ? enclosingSymbol(snapshotSymbols, editor.selection.active.line + 1, kind) : null
     if (!found) {
       void vscode.window.showInformationMessage(
         `Vouch: no enclosing ${kind} symbol — select lines and use "Review selected lines".`)
@@ -114,12 +117,16 @@ async function attest(
   if (!author) return
 
   const docText = snapshotText
-  const existing = currentResolved(ctx, rootDir, sourcePath, docText)
+  const existing = currentResolved(ctx, rootDir, sourcePath, docText, snapshotSymbols)
   const candidates = supersedeCandidates({ author, kind, symbol, range, existingCurrent: existing })
   const summary = summarizeCandidates(candidates)
 
   let prefill = ''
-  if (candidates.length > 0 && (summary.withComments > 0 || summary.dismissed > 0)) {
+  // Confirm before superseding a record whose location could not be proven
+  // (ambiguous), not only comment/dismissed ones - otherwise a symbol-blind
+  // or duplicate-content record could be silently revoked by a new review.
+  if (candidates.length > 0 &&
+      (summary.withComments > 0 || summary.dismissed > 0 || summary.ambiguous > 0)) {
     // Modal text is counts only: candidate symbols/comments are untrusted
     // cross-user data and must never be interpolated into message/detail.
     const message = `Vouching this ${kind} supersedes ${summary.total} of your reviews.`
@@ -127,6 +134,9 @@ async function attest(
     if (summary.withComments > 0) detailParts.push(`${summary.withComments} of them carry comments.`)
     if (summary.dismissed > 0) {
       detailParts.push(`${summary.dismissed} are dismissed - code changed since you reviewed them.`)
+    }
+    if (summary.ambiguous > 0) {
+      detailParts.push(`${summary.ambiguous} match more than one location - their exact spot is unverified.`)
     }
     const detail = detailParts.join('\n')
     // Cycle through ALL dismissed candidates on repeated "View diff" clicks;
@@ -189,7 +199,12 @@ async function attest(
     }
     finalRange = rebased
   }
-  const finalExisting = currentResolved(ctx, rootDir, sourcePath, finalDocText)
+  // Resolve the supersede set against the SAME symbol-aware view the surfaces
+  // use; a symbol-blind pass could enclose a record the gutter places
+  // elsewhere and silently revoke it. Symbols recomputed on the final text
+  // (the buffer may have shifted since the snapshot).
+  const finalSymbols = await documentSymbols(doc.uri)
+  const finalExisting = currentResolved(ctx, rootDir, sourcePath, finalDocText, finalSymbols)
 
   const rec = buildRecord({
     id: randomUUID(), author, createdAt: new Date().toISOString(),
@@ -210,6 +225,7 @@ async function attest(
 
 async function unvouch(
   extCtx: vscode.ExtensionContext, ctx: VouchContext, refresh: () => void,
+  pipeline: StatusPipeline,
 ): Promise<void> {
   const st = await editorState(ctx)
   if (!st) return
@@ -217,8 +233,11 @@ async function unvouch(
   const author = await resolveAuthor(extCtx, rootDir)
   if (!author) return
   const line = editor.selection.active.line + 1
-  const docText = editor.document.getText()
-  const targets = currentResolved(ctx, rootDir, sourcePath, docText).filter(e =>
+  // Resolve through the pipeline so "which line covers this record" matches
+  // the gutter/hover exactly - a symbol-blind pass could place a record on a
+  // different line and answer "none of your reviews cover this line" over its
+  // own orange mark.
+  const targets = (await pipeline.statusFor(editor.document)).entries.filter(e =>
     normalizeEmail(e.record.author.email) === normalizeEmail(author.email) &&
     (e.record.kind === 'file' || overlaps(e.res.effectiveRange, [line, line])))
   if (targets.length === 0) {
@@ -269,7 +288,7 @@ export function registerCommands(
   reg2('vouch.function', attestCmd('function'))
   reg2('vouch.class', attestCmd('class'))
   reg2('vouch.file', attestCmd('file'))
-  reg('vouch.unvouch', () => unvouch(extCtx, ctx, refresh))
+  reg('vouch.unvouch', () => unvouch(extCtx, ctx, refresh, pipeline))
   reg2('vouch.showDiff', (recordId: string) => showDiff(ctx, pipeline, recordId))
   reg2('vouch.openTimeline', (recordId: string) => openTimeline(ctx, pipeline, recordId))
 
@@ -297,13 +316,22 @@ export function registerCommands(
   // a replacement record (same comment, freshly captured location identity)
   // supersedes the ambiguous one.
   reg2('vouch.resolveAmbiguous', async (arg?: unknown) => {
-    const recordId = typeof arg === 'string' ? arg : undefined
-    if (!recordId) return
-    const found = findRecord(ctx, recordId)
-    if (!found) { void vscode.window.showWarningMessage('Vouch: record not found.'); return }
-    const { rootDir, sourcePath } = found
+    // Accept one id (hover/timeline) or several (a CodeLens group can anchor
+    // more than one ambiguous record on a line) - resolve the one the
+    // invoking user owns so the lens never dead-ends on a teammate's record.
+    const ids = typeof arg === 'string' ? [arg]
+      : Array.isArray(arg) ? arg.filter((x): x is string => typeof x === 'string') : []
+    if (ids.length === 0) return
+    const candidatesFound = ids.map(id => findRecord(ctx, id)).filter((f): f is NonNullable<typeof f> => !!f)
+    if (candidatesFound.length === 0) {
+      void vscode.window.showWarningMessage('Vouch: record not found.'); return
+    }
+    const { rootDir, sourcePath } = candidatesFound[0]!
     const author = await resolveAuthor(extCtx, rootDir)
     if (!author) return
+    const found = candidatesFound.find(f =>
+      normalizeEmail(f.record.author.email) === normalizeEmail(author.email)) ?? candidatesFound[0]!
+    const recordId = found.record.id
     if (normalizeEmail(found.record.author.email) !== normalizeEmail(author.email)) {
       void vscode.window.showInformationMessage(
         `Vouch: only ${found.record.author.name} can resolve this review - ` +
@@ -337,7 +365,9 @@ export function registerCommands(
     const picked = await new Promise<Item | undefined>(resolve => {
       const qp = vscode.window.createQuickPick<Item>()
       qp.items = items
-      qp.placeholder = `Vouch: ${candidates.length} identical matches - pick the one you reviewed`
+      qp.placeholder = candidates.length === 1
+        ? 'Vouch: one possible location - confirm it is the one you reviewed'
+        : `Vouch: ${candidates.length} identical matches - pick the one you reviewed`
       qp.onDidChangeActive(active => {
         const it = active[0]
         if (!it) return
@@ -356,6 +386,7 @@ export function registerCommands(
     // pass. Every legitimate candidate's window hashes to the record's own
     // content hash, so one check closes both races.
     const finalText = doc.getText()
+    const finalVersion = doc.version
     if (hashRangeOfText(finalText, picked.range).hash !== found.record.hash) {
       void vscode.window.showWarningMessage(
         'Vouch: the file changed while the dialog was open - resolve again.')
@@ -363,6 +394,14 @@ export function registerCommands(
       return
     }
     const symbols = await documentSymbols(doc.uri)
+    // Symbols are computed from the live buffer; if it moved after the hash
+    // check, the picked range and the symbol tree describe different states.
+    if (doc.version !== finalVersion) {
+      void vscode.window.showWarningMessage(
+        'Vouch: the file changed while the dialog was open - resolve again.')
+      refresh()
+      return
+    }
     let symbol: string | undefined
     let anchorSymbol: string | undefined
     if (found.record.kind === 'function' || found.record.kind === 'class') {
@@ -375,7 +414,7 @@ export function registerCommands(
     }
     const commit = (await headSha(rootDir)) ?? ''
     const dirty = commit ? await isDirty(rootDir, sourcePath) : false
-    const finalExisting = currentResolved(ctx, rootDir, sourcePath, finalText)
+    const finalExisting = currentResolved(ctx, rootDir, sourcePath, finalText, symbols)
     const rec = buildRecord({
       id: randomUUID(), author, createdAt: new Date().toISOString(),
       commit, dirty, kind: found.record.kind, symbol, anchorSymbol,
@@ -416,16 +455,37 @@ export function registerCommands(
   // re-reviewing at a MOVED location still replaces the old record instead
   // of leaving a duplicate amber/orange marker behind.
   reg2('vouch.reReview', async (arg?: unknown) => {
-    const st = await editorState(ctx)
-    if (!st) return
-    const { editor, rootDir, sourcePath } = st
-    const author = await resolveAuthor(extCtx, rootDir)
-    if (!author) return
-    const docText = editor.document.getText()
-    const resolved = currentResolved(ctx, rootDir, sourcePath, docText)
     const recordId = typeof arg === 'string' ? arg : undefined
     const lineHint = !!arg && typeof arg === 'object' && typeof (arg as { line?: unknown }).line === 'number'
       ? (arg as { line: number }).line : undefined
+
+    // A recordId can arrive from the timeline of a file that is NOT the active
+    // editor (or with no editor focused at all), so resolve it to its own
+    // file rather than trusting the active editor. Cursor/line-hint
+    // invocations stay editor-relative.
+    let editor: vscode.TextEditor
+    let rootDir: string
+    let sourcePath: string
+    if (recordId) {
+      const found = findRecord(ctx, recordId)
+      if (!found) { void vscode.window.showWarningMessage('Vouch: record not found.'); return }
+      rootDir = found.rootDir; sourcePath = found.sourcePath
+      try {
+        const doc = await vscode.workspace.openTextDocument(
+          vscode.Uri.file(path.join(rootDir, sourcePath)))
+        editor = await vscode.window.showTextDocument(doc, { preview: false })
+      } catch {
+        void vscode.window.showWarningMessage(`Vouch: ${sourcePath} not found.`); return
+      }
+    } else {
+      const st = await editorState(ctx)
+      if (!st) return
+      editor = st.editor; rootDir = st.rootDir; sourcePath = st.sourcePath
+    }
+
+    const author = await resolveAuthor(extCtx, rootDir)
+    if (!author) return
+    const resolved = (await pipeline.statusFor(editor.document)).entries
     const line = lineHint ?? editor.selection.active.line + 1
     const actionable = (e: { record: ReviewRecord; res: { status: string; effectiveRange: [number, number] } }): boolean =>
       normalizeEmail(e.record.author.email) === normalizeEmail(author.email) &&
@@ -443,22 +503,28 @@ export function registerCommands(
       await vscode.commands.executeCommand('vouch.file', target.record.id); return
     }
     // Whole-symbol re-review is only ever right for records that COVER a
-    // symbol. A selection record with an anchor must not escalate into a
-    // function-wide attestation the user never read.
+    // symbol AND whose symbol resolves to exactly one place. A selection
+    // record, or a duplicate/absent symbol, must not escalate into a
+    // function-wide attestation of code the user never brought on screen.
     if ((target.record.kind === 'function' || target.record.kind === 'class') && target.record.symbol) {
       const symbols = await documentSymbols(editor.document.uri)
-      const node = symbols ? resolveSymbolPath(symbols, target.record.symbol) : null
-      if (node) {
-        editor.selection = new vscode.Selection(node.range[0] - 1, 0, node.range[1] - 1, 0)
+      const matches = symbols ? resolveSymbolPathAll(symbols, target.record.symbol) : []
+      if (matches.length === 1) {
+        const node = matches[0]!
+        const symRange = new vscode.Range(node.range[0] - 1, 0, node.range[1] - 1, 0)
+        editor.selection = new vscode.Selection(symRange.start, symRange.end)
+        editor.revealRange(symRange, vscode.TextEditorRevealType.InCenterIfOutsideViewport)
         await vscode.commands.executeCommand(
           target.record.kind === 'class' ? 'vouch.class' : 'vouch.function', target.record.id)
         return
       }
     }
-    // free-form (or symbol gone): preselect displayed range, ask user to confirm/adjust
+    // free-form (or symbol gone/duplicated): preselect displayed range, ask
+    // the user to confirm/adjust, so they attest the location they saw.
     const [s, e] = target.res.effectiveRange
     editor.selection = new vscode.Selection(s - 1, 0, e - 1, 0)
-    editor.revealRange(new vscode.Range(s - 1, 0, e - 1, 0))
+    editor.revealRange(new vscode.Range(s - 1, 0, e - 1, 0),
+      vscode.TextEditorRevealType.InCenterIfOutsideViewport)
     const choice = await vscode.window.showInformationMessage(
       'Vouch: confirm or adjust the selection, then re-review.', 'Re-review selection')
     if (choice === 'Re-review selection') {

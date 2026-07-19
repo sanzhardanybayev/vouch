@@ -48,11 +48,13 @@ export class VouchCodeLensProvider implements vscode.CodeLensProvider {
       // An ambiguous group's "resolve" goes straight to the resolve flow for
       // the ambiguous record itself; anything else opens the timeline (a
       // whole-file view, safe regardless of which record represents it).
-      const ambiguous = group.find(g => g.res.status === 'ambiguous')
+      const ambiguousIds = group.filter(g => g.res.status === 'ambiguous').map(g => g.record.id)
       const dismissed = group.some(g => g.res.status === 'dismissed')
-      if (ambiguous && !dismissed) {
+      if (ambiguousIds.length > 0 && !dismissed) {
+        // Pass every ambiguous id on the line; the command resolves the one
+        // the invoking user owns, so the lens never dead-ends on a teammate's.
         lenses.push(new vscode.CodeLens(range, {
-          title, command: 'vouch.resolveAmbiguous', arguments: [ambiguous.record.id] }))
+          title, command: 'vouch.resolveAmbiguous', arguments: [ambiguousIds] }))
       } else {
         lenses.push(new vscode.CodeLens(range, {
           title, command: 'vouch.openTimeline', arguments: [group[0]!.record.id] }))
