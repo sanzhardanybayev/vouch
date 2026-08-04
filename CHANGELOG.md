@@ -5,6 +5,26 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-05
+
+### Fixed
+
+- **Call-site hover now reliably shows a function's review status.** Four gaps
+  made the hover intermittently missing:
+  - Functions defined in the same file as the call site were never served.
+  - The defining file had to be open in the editor; the hover now loads a
+    record-carrying target file itself (guarded by a cheap in-memory store
+    check, so files without records still cost nothing).
+  - A definition lookup that exceeded its 400ms budget cached `null` and
+    permanently killed the hover at that spot until the next edit; the cache
+    now only ever holds real lookup results, and a late result still lands so
+    the next hover is instant.
+  - Definition providers answering with identifier-only ranges (plain
+    `Location`) missed reviews covering the function body but not the
+    signature line; the range is now expanded to the enclosing symbol.
+
+[0.1.2]: https://github.com/sanzhardanybayev/vouch/releases/tag/v0.1.2
+
 ## [0.1.1] - 2026-08-05
 
 ### Fixed

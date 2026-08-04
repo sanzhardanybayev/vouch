@@ -2,8 +2,12 @@ import * as assert from 'node:assert'
 import * as vscode from 'vscode'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { buildTree } from '../../../src/core/treemodel'
 import { pct } from '../../../src/core/coverage'
+import { buildRecord } from '../../../src/core/attest'
+import { appendLine } from '../../../src/core/writer'
+import { authorSlug } from '../../../src/core/paths'
 
 describe('activation', () => {
   it('activates and exposes the test api', async () => {
@@ -96,6 +100,83 @@ describe('range hover', () => {
       .join('\n')
     assert.match(all, /reviewed|dismissed/)
     assert.match(all, /Vouch|timeline/i)
+  })
+})
+
+describe('call-site hover', () => {
+  // The TS server answers definition lookups only after warmup, and the
+  // provider deliberately returns nothing while a lookup exceeds its 400ms
+  // budget (the late result lands in the def cache) — so poll.
+  async function vouchHoverAt(uri: vscode.Uri, pos: vscode.Position): Promise<string> {
+    for (let i = 0; i < 30; i++) {
+      const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+        'vscode.executeHoverProvider',
+        uri,
+        pos,
+      )
+      const all = (hovers ?? [])
+        .flatMap((h) => h.contents)
+        .map((c) => (typeof c === 'string' ? c : (c as vscode.MarkdownString).value))
+        .join('\n')
+      if (/reviewed|dismissed/.test(all)) return all
+      await new Promise((r) => setTimeout(r, 500))
+    }
+    return ''
+  }
+
+  it('shows the target status when the defining file was never opened', async () => {
+    // Inject a review for util.ts straight into the store, the way a teammate's
+    // record arrives via git pull — no test ever opens util.ts as a document,
+    // so the hover must load the record-carrying target file itself.
+    const ws = vscode.workspace.workspaceFolders![0]!.uri.fsPath
+    const utilText = fs.readFileSync(path.join(ws, 'src/util.ts'), 'utf8')
+    const rec = buildRecord({
+      id: randomUUID(),
+      author: { name: 'Teammate', email: 'mate@test.dev' },
+      createdAt: new Date().toISOString(),
+      commit: 'deadbeef',
+      dirty: false,
+      kind: 'selection',
+      range: [1, 3],
+      docText: utilText,
+      existingCurrent: [],
+    })
+    await appendLine(ws, 'src/util.ts', authorSlug('mate@test.dev'), rec)
+    const api = (
+      await vscode.extensions.getExtension('sanzhardanybayev.vouch-review-coverage')!.activate()
+    ).getTestApi()
+    // Wait for the store watcher to ingest the shard.
+    for (let i = 0; i < 40; i++) {
+      const state = api.context.roots[0]!.store.stateFor('src/util.ts')
+      if (state && state.current.length > 0) break
+      await new Promise((r) => setTimeout(r, 250))
+    }
+
+    const doc = await vscode.workspace.openTextDocument(path.join(ws, 'src/app.ts'))
+    await vscode.window.showTextDocument(doc)
+    const line = doc.lineAt(8).text // return greet(String(helper()))
+    const md = await vouchHoverAt(doc.uri, new vscode.Position(8, line.indexOf('greet') + 1))
+    assert.match(md, /reviewed/, 'call-site hover surfaces the never-opened target file status')
+  })
+
+  it('shows the status of a same-file function reviewed as selected lines', async () => {
+    const ws = vscode.workspace.workspaceFolders![0]!.uri.fsPath
+    const doc = await vscode.workspace.openTextDocument(path.join(ws, 'src/app.ts'))
+    const editor = await vscode.window.showTextDocument(doc)
+    // Review helper's body (lines 4-6) as a plain selection.
+    editor.selection = new vscode.Selection(3, 0, 5, 1)
+    const orig = vscode.window.showInputBox
+    ;(vscode.window as { showInputBox: typeof orig }).showInputBox = async () => ''
+    try {
+      await vscode.commands.executeCommand('vouch.selection')
+    } finally {
+      ;(vscode.window as { showInputBox: typeof orig }).showInputBox = orig
+    }
+    // Hover the `helper` call inside run() (line 9, itself unreviewed): the
+    // definition lives in this same file, which previously disqualified it.
+    const line = doc.lineAt(8).text // return greet(String(helper()))
+    const md = await vouchHoverAt(doc.uri, new vscode.Position(8, line.indexOf('helper') + 1))
+    assert.match(md, /reviewed/, 'same-file call-site hover surfaces the review')
   })
 })
 
