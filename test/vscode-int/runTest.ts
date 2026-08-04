@@ -24,7 +24,10 @@ async function main(): Promise<void> {
   await runTests({
     extensionDevelopmentPath,
     extensionTestsPath,
-    launchArgs: [ws, '--disable-extensions', `--user-data-dir=${userDataDir}`],
+    // No --disable-extensions: the call-site hover tests need the built-in
+    // TypeScript extension as a definition provider. The extensions dir under
+    // .vscode-test is isolated, so no user-installed extensions load anyway.
+    launchArgs: [ws, `--user-data-dir=${userDataDir}`],
   })
 }
 main().catch((err) => {
