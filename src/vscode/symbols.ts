@@ -1,20 +1,28 @@
 import * as vscode from 'vscode'
-import type { SymbolNode } from '../core/anchor'
+import { looksFunctionValued, type SymbolNode } from '../core/anchor'
 
-function kindClass(kind: vscode.SymbolKind): SymbolNode['kindClass'] {
+function kindClass(s: vscode.DocumentSymbol, doc: vscode.TextDocument): SymbolNode['kindClass'] {
   const K = vscode.SymbolKind
+  const kind = s.kind
   if (kind === K.Function || kind === K.Method || kind === K.Constructor) return 'function'
   if (kind === K.Class || kind === K.Interface || kind === K.Struct || kind === K.Enum)
     return 'class'
+  // Language servers report `const f = () => {}` (and function-valued class
+  // fields) as variable-kind symbols; sniff the declaration text.
+  if (
+    (kind === K.Variable || kind === K.Constant || kind === K.Property || kind === K.Field) &&
+    looksFunctionValued(doc.getText(s.range))
+  )
+    return 'function'
   return 'other'
 }
 
-function toNode(s: vscode.DocumentSymbol): SymbolNode {
+function toNode(s: vscode.DocumentSymbol, doc: vscode.TextDocument): SymbolNode {
   return {
     name: s.name,
-    kindClass: kindClass(s.kind),
+    kindClass: kindClass(s, doc),
     range: [s.range.start.line + 1, s.range.end.line + 1],
-    children: s.children.map(toNode),
+    children: s.children.map((c) => toNode(c, doc)),
   }
 }
 
@@ -33,5 +41,6 @@ export async function documentSymbols(uri: vscode.Uri): Promise<SymbolNode[] | n
   >('vscode.executeDocumentSymbolProvider', uri)
   if (!result || result.length === 0) return null
   if (!('children' in result[0]!)) return null
-  return (result as vscode.DocumentSymbol[]).map(toNode)
+  const doc = await vscode.workspace.openTextDocument(uri)
+  return (result as vscode.DocumentSymbol[]).map((s) => toNode(s, doc))
 }

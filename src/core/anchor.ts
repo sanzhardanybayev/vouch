@@ -9,6 +9,36 @@ export interface SymbolNode {
   children: SymbolNode[]
 }
 
+/**
+ * Heuristic for variable-kind symbols whose initializer is a function value
+ * (`const f = () => {}`, `const f = function () {}`). Language servers report
+ * these as variable/constant symbols, so kind alone can't classify them as
+ * functions; the declaration text can. Object/array/string initializers are
+ * rejected even when they contain arrows, so `const obj = { m: () => 2 }`
+ * stays a non-function.
+ */
+export function looksFunctionValued(text: string): boolean {
+  const eq = findAssignmentEquals(text)
+  if (eq < 0) return false
+  const init = text.slice(eq + 1).trimStart()
+  if (/^(async\s+)?function\b/.test(init)) return true
+  if (/^[{['"`]/.test(init)) return false
+  return init.includes('=>')
+}
+
+/** Index of the first `=` that is an assignment, not part of `=>`/`==`/`<=`/`>=`/`!=`. */
+function findAssignmentEquals(text: string): number {
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '=') continue
+    const prev = text[i - 1]
+    const next = text[i + 1]
+    if (next === '>' || next === '=') continue
+    if (prev === '=' || prev === '!' || prev === '<' || prev === '>') continue
+    return i
+  }
+  return -1
+}
+
 type SymbolWant = 'function' | 'class' | 'any'
 const wants = (n: SymbolNode, want: SymbolWant): boolean =>
   want === 'any' ? n.kindClass !== 'other' : n.kindClass === want

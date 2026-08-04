@@ -5,6 +5,19 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-05
+
+### Fixed
+
+- **"Review enclosing function" now works inside arrow functions assigned to
+  variables** (`const f = () => {}`, function-valued class fields). Language
+  servers report these as variable-kind symbols, so the command previously
+  failed with "no enclosing function symbol". The declaration text is now
+  sniffed to classify function-valued variables as functions; object, array,
+  and string initializers containing `=>` are still excluded.
+
+[0.1.1]: https://github.com/sanzhardanybayev/vouch/releases/tag/v0.1.1
+
 ## [0.1.0] - 2026-07-19
 
 ### Added
