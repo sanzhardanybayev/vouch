@@ -86,6 +86,7 @@ export function rangeHoverMd(entries: HoverEntry[], nowIso: string): string {
       e.status === 'ambiguous' ? `[Resolve](${cmd('vouch.resolveAmbiguous', e.recordId)}) · ` : ''
     parts.push(
       resolve +
+        `[Actions…](${cmd('vouch.actions', e.recordId)}) · ` +
         `[Open timeline](${cmd('vouch.openTimeline', e.recordId)}) · ` +
         `[Diff since review](${cmd('vouch.showDiff', e.recordId)}) · ` +
         `[Re-review](${cmd('vouch.reReview', e.recordId)})`,

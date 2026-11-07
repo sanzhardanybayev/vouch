@@ -71,6 +71,10 @@
         "title": "Vouch: Re-review (after dismissal)"
       },
       {
+        "command": "vouch.actions",
+        "title": "Vouch: Review actions at cursor…"
+      },
+      {
         "command": "vouch.unvouch",
         "title": "Vouch: Revoke my review"
       },
@@ -158,6 +162,10 @@
           "command": "vouch.macro",
           "when": "editorLangId == rust",
           "group": "ar@6"
+        },
+        {
+          "command": "vouch.actions",
+          "group": "b@0"
         },
         {
           "command": "vouch.reReview",

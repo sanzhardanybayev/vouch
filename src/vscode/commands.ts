@@ -616,6 +616,130 @@ export function registerCommands(
     void vscode.env.openExternal(vscode.Uri.parse(url))
   })
 
+  // The status menu behind a review bar (hover "Actions…" link, editor
+  // menu, palette). It offers only the verbs Vouch has - re-review, resolve,
+  // revoke, inspect: a status is never set by hand (docs/adr/0002).
+  // Accepts a record id (hover link) or nothing (reviews at the cursor).
+  reg2('vouch.actions', async (arg?: unknown) => {
+    let doc: vscode.TextDocument
+    let rootDir: string
+    let sourcePath: string
+    let line: number | undefined
+    if (typeof arg === 'string') {
+      const found = findRecord(ctx, arg)
+      if (!found) {
+        void vscode.window.showWarningMessage('Vouch: record not found.')
+        return
+      }
+      ;({ rootDir, sourcePath } = found)
+      try {
+        doc = await vscode.workspace.openTextDocument(
+          vscode.Uri.file(path.join(rootDir, sourcePath)),
+        )
+      } catch {
+        void vscode.window.showWarningMessage(`Vouch: ${sourcePath} not found.`)
+        return
+      }
+    } else {
+      const st = await editorState(ctx)
+      if (!st) return
+      ;({ rootDir, sourcePath } = st)
+      doc = st.editor.document
+      line = st.editor.selection.active.line + 1
+    }
+    const entries = (await pipeline.statusFor(doc)).entries.filter((e) =>
+      typeof arg === 'string'
+        ? e.record.id === arg
+        : e.record.kind === 'file' || overlaps(e.res.effectiveRange, [line!, line!]),
+    )
+    if (entries.length === 0) {
+      void vscode.window.showInformationMessage('Vouch: no reviews cover this line.')
+      return
+    }
+    const describe = (e: (typeof entries)[number]): string => {
+      const r = e.record
+      const scope =
+        r.kind === 'file'
+          ? 'file'
+          : `${r.kind} ${r.symbol ?? `L${e.res.effectiveRange[0]}-${e.res.effectiveRange[1]}`}`
+      return `${e.res.status} - ${r.author.name} - ${scope}`
+    }
+    let entry = entries[0]!
+    if (entries.length > 1) {
+      // Labels carry untrusted record text, but a QuickPick renders plain
+      // text only (no markdown, no links).
+      const picked = await vscode.window.showQuickPick(
+        entries.map((e) => ({ label: describe(e), entry: e })),
+        { placeHolder: 'Vouch: several reviews cover this line - pick one' },
+      )
+      if (!picked) return
+      entry = picked.entry
+    }
+    const author = await resolveAuthor(extCtx, rootDir)
+    if (!author) return
+    const id = entry.record.id
+    const mine = normalizeEmail(entry.record.author.email) === normalizeEmail(author.email)
+    type Action = vscode.QuickPickItem & { run: () => Thenable<unknown> | Promise<unknown> }
+    const actions: Action[] = []
+    if (mine && entry.res.status === 'ambiguous') {
+      actions.push({
+        label: '$(pin) Resolve',
+        detail: 'Pin this review to the location you actually reviewed',
+        run: () => vscode.commands.executeCommand('vouch.resolveAmbiguous', id),
+      })
+    }
+    actions.push({
+      label: mine ? '$(check) Re-review' : '$(check) Review it yourself',
+      detail: mine
+        ? 'Vouch again for the code as it is now; replaces this review'
+        : `Add your own review next to ${entry.record.author.name}'s`,
+      run: () => vscode.commands.executeCommand('vouch.reReview', id),
+    })
+    if (mine) {
+      actions.push({
+        label: '$(trash) Revoke my review',
+        detail: 'The code becomes honestly unreviewed; history keeps the record',
+        run: async () => {
+          const tomb: Tombstone = {
+            id: randomUUID(),
+            author,
+            createdAt: new Date().toISOString(),
+            revokes: id,
+            reason: 'unvouch',
+          }
+          try {
+            await appendLine(rootDir, sourcePath, authorSlug(author.email), tomb)
+          } catch (err) {
+            void vscode.window.showErrorMessage(`Vouch: failed to revoke — ${String(err)}`)
+            return
+          }
+          await ctx.reload()
+          refresh()
+        },
+      })
+    }
+    actions.push(
+      {
+        label: '$(diff) Diff since review',
+        run: () => vscode.commands.executeCommand('vouch.showDiff', id),
+      },
+      {
+        label: '$(history) Open timeline',
+        run: () => vscode.commands.executeCommand('vouch.openTimeline', id),
+      },
+    )
+    if (entry.record.commit && isValidSha(entry.record.commit)) {
+      actions.push({
+        label: '$(link-external) Open review commit on web',
+        run: () => vscode.commands.executeCommand('vouch.openCommitOnWeb', id),
+      })
+    }
+    const choice = await vscode.window.showQuickPick(actions, {
+      placeHolder: `Vouch: ${describe(entry)}`,
+    })
+    if (choice) await choice.run()
+  })
+
   // Accepts a record id (hover/timeline links), a {line} hint (CodeLens
   // groups), or nothing (cursor position). The resolved target's id is
   // threaded through the delegated attest as an explicit supersede target so

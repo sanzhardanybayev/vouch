@@ -41,6 +41,9 @@ describe('rangeHoverMd', () => {
     expect(md).toContain(`command:vouch.showDiff?${encodeURIComponent(JSON.stringify(['r1']))}`)
     expect(md).toContain('command:vouch.reReview?')
     expect(md).toContain('command:vouch.openTimeline?')
+    expect(md).toContain(
+      `[Actions…](command:vouch.actions?${encodeURIComponent(JSON.stringify(['r1']))})`,
+    )
   })
   it('dismissed uses warning glyph and label', () => {
     const md = rangeHoverMd(
@@ -246,10 +249,10 @@ describe('rangeHoverMd — injection safety', () => {
       ],
       NOW,
     )
-    // Only the three legitimate action links should produce `](command:` —
-    // a forged commit must not add a fourth.
+    // Only the four legitimate action links should produce `](command:` —
+    // a forged commit must not add a fifth.
     const commandLinkCount = (md.match(/\]\(command:/g) ?? []).length
-    expect(commandLinkCount).toBe(3)
+    expect(commandLinkCount).toBe(4)
     expect(md).not.toContain('PWNED')
     expect(md).not.toContain('attacker-arg')
   })
