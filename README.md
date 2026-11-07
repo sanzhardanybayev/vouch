@@ -125,7 +125,7 @@ Reviewing a scope that **fully encloses** your earlier reviews (e.g. a whole fun
 
 ### Honest coverage
 
-A folder's percentage is **reviewed lines ÷ lines across every git-tracked file** in it — an untouched file still contributes its full line count to the denominator. A hundred-file folder with one small reviewed selection shows a low, honest number, not 100%. Binary and empty files are excluded from the ratio entirely; unreviewed files stay visually dim in the tree while still counting against their folder's total. The number is honest at the edges too: 100% appears only when every line is reviewed, never from rounding.
+A folder's percentage is **reviewed lines ÷ lines across every git-tracked file** in it — an untouched file still contributes its full line count to the denominator. Blank (whitespace-only) lines need no review and count on neither side, so a file whose every function is reviewed reads 100% regardless of the empty lines between them. A hundred-file folder with one small reviewed selection shows a low, honest number, not 100%. Binary, empty, and blank-only files are excluded from the ratio entirely; unreviewed files stay visually dim in the tree while still counting against their folder's total. The number is honest at the edges too: 100% appears only when every line is reviewed, never from rounding.
 
 Committed lockfiles, vendored code, or generated files can dominate that denominator. Add a **`.vouchignore`** at the repo root (gitignore-style patterns: `*`, `**`, `?`, `/` anchors, `!` negation) to exclude paths from the coverage universe - the tree, the percentages, the header counts, and reviewer stats all honor it. Editor surfaces (gutter, hover, CodeLens) still work in ignored files; they just do not count toward coverage.
 
@@ -149,39 +149,56 @@ One honest caveat: if the SAME person reviews the SAME file on two branches, tho
 
 ## Surfaces
 
-- **Gutter** — a ✓ / ⚠ / ? on the first line of each reviewed / dismissed / ambiguous range.
+- **Gutter icons** _(default, deprecated: removed in the next major version)_ — a ✓ / ⚠ / ? in the gutter on the first line of each range. Two problems: only the first line is marked, so you cannot see how far a review reaches; and the icon fills the gutter cell where a click sets a breakpoint, so an icon and a breakpoint on the same line cover each other while debugging.
+- **Range bars** _(opt in with [`vouch.decorations.style: "bars"`](#settings); the default from the next major version)_ — a thin teal / orange / amber bar on every line of a reviewed / dismissed / ambiguous span, at the right edge of the gutter next to the line numbers. What they give you over icons:
+  - **the size of each reviewed block is visible** — the bar runs from its first to its last line, so unreviewed lines between reviews stand out as gaps;
+  - **overlaps are readable** — where reviews overlap, each line shows the status that needs attention first (dismissed, then ambiguous, then reviewed);
+  - **breakpoints stay visible** — the bar is a few pixels wide at the edge of the cell, so a breakpoint dot on the same line is not covered.
+
+  Hover the code for the review and its **Actions…** menu (re-review, resolve, revoke, diff, timeline). VS Code reserves the column of the git change bars to itself, so the bar sits in the breakpoint column; clicking it sets a breakpoint, as anywhere in that column.
+
+- **Show/hide review marks** — marks matter while reviewing, not while writing code: the eye button in the **Review Coverage** view title (or `Vouch: Hide review marks in editors`) hides the icons or bars in every editor. Hover, CodeLens and the sidebar keep working. Remembered per workspace.
 - **CodeLens** — an inline `✓ Reviewed by <name>, <time>` above reviewed code, with **Re-review** and **Diff** actions; click the reviewer text to open the **Timeline**. Flips to `⚠ Dismissed (changed since review) — re-review` when the text changes, and to `? Ambiguous (matches multiple locations) - resolve` when it needs a human pick. Toggle with [`vouch.codeLens.enabled`](#settings).
 - **Hover** — the full per-reviewer timeline for a range, with commit links and quick actions.
-- **Sidebar** — the **Vouch** activity-bar view: an honest coverage tree plus a **Reviewers** section listing each engineer (`12 reviews · 5 files`), expandable to the files they reviewed.
+- **Sidebar** — the **Vouch** activity-bar view: an honest coverage tree plus a **Reviewers** section listing each engineer (`12 reviews · 5 files`), expandable to the files they reviewed. A **Filters** view above the tree narrows it on large codebases: hide files with no reviews (on by default), pick one reviewer, or match a regex against the repo-relative path (`^src/core/`, `\.test\.ts$`). Filters only change what is shown - percentages keep counting every file.
 - **Timeline & diff** — a webview of every review on a file over time, and a diff of current code against the exact text that was reviewed.
 
 ## Commands
 
-All commands are available from the command palette; the marking and review commands are also on the editor's right-click **Vouch** submenu.
+All commands are available from the command palette; the marking and review commands are also on the editor's right-click **Vouch** submenu. The Rust commands appear in Rust files only; they need a Rust language server (rust-analyzer) and write ordinary class/function records, so teammates on older Vouch versions see those reviews too ([ADR 0003](docs/adr/0003-language-scopes-reuse-record-kinds.md)).
 
-| Command                               | Does                                                                                                       |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `Vouch: Initialize in workspace`      | Create `.vouch/` and the `.gitattributes` hint                                                             |
-| `Vouch: Review selected lines`        | Attest the current selection                                                                               |
-| `Vouch: Review enclosing function`    | Attest the function around the cursor (needs a language server)                                            |
-| `Vouch: Review enclosing class`       | Attest the enclosing class                                                                                 |
-| `Vouch: Review entire file`           | Attest the whole document                                                                                  |
-| `Vouch: Re-review (after dismissal)`  | Re-attest a range whose code changed                                                                       |
-| `Vouch: Revoke my review`             | Append a tombstone revoking your review                                                                    |
-| `Vouch: Diff since my review`         | Diff current code against the reviewed text                                                                |
-| `Vouch: Open review commit on web`    | Open the review's commit on the git host                                                                   |
-| `Vouch: Open review timeline`         | Open the per-reviewer timeline webview                                                                     |
-| `Vouch: Re-attach orphaned reviews`   | Point a renamed file's reviews at its new path (moves your own records; each reviewer re-attaches theirs)  |
-| `Vouch: Refresh reviews and coverage` | Reload `.vouch/` records and rescan tracked files (manual fallback if a watcher misses an external change) |
+| Command                               | Does                                                                                                                           |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `Vouch: Initialize in workspace`      | Create `.vouch/` and the `.gitattributes` hint                                                                                 |
+| `Vouch: Review selected lines`        | Attest the current selection                                                                                                   |
+| `Vouch: Review enclosing function`    | Attest the function around the cursor (needs a language server)                                                                |
+| `Vouch: Review enclosing class`       | Attest the enclosing class                                                                                                     |
+| `Vouch: Review enclosing struct`      | Rust: attest the enclosing `struct` (or `union`)                                                                               |
+| `Vouch: Review enclosing enum`        | Rust: attest the enclosing `enum`                                                                                              |
+| `Vouch: Review enclosing trait`       | Rust: attest the enclosing `trait`                                                                                             |
+| `Vouch: Review enclosing impl`        | Rust: attest the enclosing `impl` block                                                                                        |
+| `Vouch: Review enclosing mod`         | Rust: attest the enclosing inline `mod` (e.g. `#[cfg(test)] mod tests`)                                                        |
+| `Vouch: Review enclosing macro`       | Rust: attest the enclosing `macro_rules!` / `macro` definition                                                                 |
+| `Vouch: Review entire file`           | Attest the whole document                                                                                                      |
+| `Vouch: Re-review (after dismissal)`  | Re-attest a range whose code changed                                                                                           |
+| `Vouch: Review actions at cursor…`    | Menu of what can be done with the review(s) at the cursor: resolve, re-review, revoke, diff, timeline                          |
+| `Vouch: Revoke my review`             | Append a tombstone revoking your review                                                                                        |
+| `Vouch: Diff since my review`         | Diff current code against the reviewed text                                                                                    |
+| `Vouch: Open review commit on web`    | Open the review's commit on the git host                                                                                       |
+| `Vouch: Open review timeline`         | Open the per-reviewer timeline webview                                                                                         |
+| `Vouch: Re-attach orphaned reviews`   | Point a renamed file's reviews at its new path (moves your own records; each reviewer re-attaches theirs)                      |
+| `Vouch: Hide review marks in editors` | Hide the gutter icons / range bars in all editors (also the eye button in the Review Coverage title); `Show…` brings them back |
+| `Vouch: Refresh reviews and coverage` | Reload `.vouch/` records and rescan tracked files (manual fallback if a watcher misses an external change)                     |
 
 An ambiguous review's **Resolve** action lives on its CodeLens, hover, and timeline entry: it previews each candidate location and, on pick, writes a replacement record pinned there. Only the review's author can resolve it - anyone else re-reviews the code themselves.
 
 ## Settings
 
-| Setting                  | Default | Description                                                                                                                                                                                         |
-| ------------------------ | :-----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vouch.codeLens.enabled` | `true`  | Show the CodeLens above reviewed code with reviewer, time, and Timeline / Re-review / Diff links.                                                                                                   |
-| `vouch.coverage.enabled` | `true`  | Scan tracked files for the sidebar coverage tree. When off, reviewers and orphans still show; gutter/hover/CodeLens are unaffected. The scan only ever runs in repositories that contain `.vouch/`. |
+| Setting                   |    Default    | Description                                                                                                                                                                                                                                                                                            |
+| ------------------------- | :-----------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `vouch.codeLens.enabled`  |    `true`     | Show the CodeLens above reviewed code with reviewer, time, and Timeline / Re-review / Diff links.                                                                                                                                                                                                      |
+| `vouch.decorations.style` | `gutterIcons` | How reviews are drawn in the gutter. `bars`: a bar on every line of a review, so its size is visible and breakpoints stay visible. `gutterIcons` (deprecated): an icon on a review's first line only, covering the breakpoint cell; removed in the next major version, which makes `bars` the default. |
+| `vouch.coverage.enabled`  |    `true`     | Scan tracked files for the sidebar coverage tree. When off, reviewers and orphans still show; gutter/hover/CodeLens are unaffected. The scan only ever runs in repositories that contain `.vouch/`.                                                                                                    |
 
 ## Team workflow
 
@@ -216,7 +233,7 @@ npm run package      # build + produce vouch-review-coverage-0.0.2.vsix
 npm run watch        # rebuild on change while developing
 ```
 
-Press **F5** in VS Code to launch an Extension Development Host with Vouch loaded. Requires Node 18+ and git on `PATH`. The test suite is **282 tests** (274 unit + 8 integration) and must stay green.
+Press **F5** in VS Code to launch an Extension Development Host with Vouch loaded. Requires Node 18+ and git on `PATH`. The test suite is **355 tests** (347 unit + 8 integration) and must stay green.
 
 ## Roadmap / Limitations
 
