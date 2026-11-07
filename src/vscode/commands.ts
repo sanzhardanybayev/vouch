@@ -27,6 +27,7 @@ import { isKnownKind } from '../core/records'
 import type { RustItem } from '../core/rust'
 import { appendLine, initVouch } from '../core/writer'
 import type { Author, RecordKind, ReviewRecord, Tombstone } from '../core/types'
+import { escapeIcons } from '../core/quickpick'
 import type { VouchContext } from './context'
 import type { StatusPipeline } from './pipeline'
 import { documentSymbols } from './symbols'
@@ -426,7 +427,7 @@ export function registerCommands(
         r.kind === 'file'
           ? 'file'
           : (r.symbol ?? (r.range ? `L${r.range[0]}-${r.range[1]}` : r.kind))
-      return [{ label: `${r.author.name} - ${r.kind} ${scope}`, id }]
+      return [{ label: escapeIcons(`${r.author.name} - ${r.kind} ${scope}`), id }]
     })
     const picked = await vscode.window.showQuickPick(items, {
       placeHolder: 'Vouch: pick the review to diff',
@@ -662,12 +663,12 @@ export function registerCommands(
         r.kind === 'file'
           ? 'file'
           : `${r.kind} ${r.symbol ?? `L${e.res.effectiveRange[0]}-${e.res.effectiveRange[1]}`}`
-      return `${e.res.status} - ${r.author.name} - ${scope}`
+      return escapeIcons(`${e.res.status} - ${r.author.name} - ${scope}`)
     }
     let entry = entries[0]!
     if (entries.length > 1) {
-      // Labels carry untrusted record text, but a QuickPick renders plain
-      // text only (no markdown, no links).
+      // Labels carry untrusted record text. A QuickPick renders no markdown
+      // or links, but it does render $(codicon) tokens: describe() escapes them.
       const picked = await vscode.window.showQuickPick(
         entries.map((e) => ({ label: describe(e), entry: e })),
         { placeHolder: 'Vouch: several reviews cover this line - pick one' },
@@ -692,7 +693,7 @@ export function registerCommands(
       label: mine ? '$(check) Re-review' : '$(check) Review it yourself',
       detail: mine
         ? 'Vouch again for the code as it is now; replaces this review'
-        : `Add your own review next to ${entry.record.author.name}'s`,
+        : `Add your own review next to ${escapeIcons(entry.record.author.name)}'s`,
       run: () => vscode.commands.executeCommand('vouch.reReview', id),
     })
     if (mine) {
