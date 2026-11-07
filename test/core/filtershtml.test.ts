@@ -21,4 +21,9 @@ describe('filtersHtml', () => {
     expect(html).not.toContain('innerHTML')
     expect(html).toContain('o.textContent = r.name')
   })
+
+  it('keeps a saved reviewer selectable when it is no longer in the list', () => {
+    expect(html).toContain("o.textContent = want + ' (no current reviews)'")
+    expect(html).toContain('reviewer.value = want')
+  })
 })

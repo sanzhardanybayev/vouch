@@ -58,7 +58,17 @@ export function filtersHtml(cspSource: string, nonce: string): string {
       o.textContent = r.name + ' <' + r.email + '>'
       reviewer.appendChild(o)
     }
-    reviewer.value = m.filter.reviewer || ''
+    // A saved reviewer with no current reviews (all revoked, or another set
+    // of roots) still filters the tree: keep it selectable and selected, so
+    // the dropdown never claims 'All reviewers' over a filtered tree.
+    const want = m.filter.reviewer || ''
+    if (want !== '' && !m.reviewers.some((r) => r.email === want)) {
+      const o = document.createElement('option')
+      o.value = want
+      o.textContent = want + ' (no current reviews)'
+      reviewer.appendChild(o)
+    }
+    reviewer.value = want
     // Never clobber what the user is typing with an echo of older state.
     if (document.activeElement !== pathInput) pathInput.value = m.filter.pathRegex
     error.textContent = m.error || ''
