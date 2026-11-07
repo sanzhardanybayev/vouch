@@ -63,8 +63,18 @@ export class Gutter {
     }
   }
 
+  private hidden = false
+
+  /** Hide every review mark in editors (review-time only aid); hover, CodeLens and the tree stay. */
+  setHidden(hidden: boolean): void {
+    this.hidden = hidden
+  }
+
   apply(editor: vscode.TextEditor, status: FileStatus): void {
-    if (decorationStyle() === 'bars') {
+    if (this.hidden) {
+      this.clear(editor, this.icons)
+      this.clear(editor, this.bars)
+    } else if (decorationStyle() === 'bars') {
       this.clear(editor, this.icons)
       this.applyBars(editor, status)
     } else {

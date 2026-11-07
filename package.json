@@ -93,6 +93,16 @@
       {
         "command": "vouch.refresh",
         "title": "Vouch: Refresh reviews and coverage"
+      },
+      {
+        "command": "vouch.hideDecorations",
+        "title": "Vouch: Hide review marks in editors",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "vouch.showDecorations",
+        "title": "Vouch: Show review marks in editors",
+        "icon": "$(eye)"
       }
     ],
     "menus": {
@@ -186,6 +196,26 @@
         {
           "command": "vouch.macro",
           "when": "editorLangId == rust"
+        },
+        {
+          "command": "vouch.hideDecorations",
+          "when": "!vouch.decorationsHidden"
+        },
+        {
+          "command": "vouch.showDecorations",
+          "when": "vouch.decorationsHidden"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "vouch.hideDecorations",
+          "when": "view == vouch.coverage && !vouch.decorationsHidden",
+          "group": "navigation"
+        },
+        {
+          "command": "vouch.showDecorations",
+          "when": "view == vouch.coverage && vouch.decorationsHidden",
+          "group": "navigation"
         }
       ]
     },
