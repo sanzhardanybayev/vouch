@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { lineStatuses } from '../../src/core/bars'
+import { lineStatuses, mostUrgent } from '../../src/core/bars'
 
 describe('lineStatuses', () => {
   it('one span -> one run covering its whole range', () => {
@@ -20,22 +20,48 @@ describe('lineStatuses', () => {
     ).toEqual([{ status: 'reviewed', range: [1, 6] }])
   })
 
-  it('dismissed beats ambiguous beats reviewed where spans overlap', () => {
+  it('dismissed beats ambiguous where reviews that do not verify overlap', () => {
     expect(
       lineStatuses(
         [
-          { status: 'reviewed', range: [1, 10] },
-          { status: 'ambiguous', range: [3, 5] },
-          { status: 'dismissed', range: [5, 6] },
+          { status: 'ambiguous', range: [1, 6] },
+          { status: 'dismissed', range: [4, 8] },
         ],
         10,
       ),
     ).toEqual([
-      { status: 'reviewed', range: [1, 2] },
-      { status: 'ambiguous', range: [3, 4] },
-      { status: 'dismissed', range: [5, 6] },
-      { status: 'reviewed', range: [7, 10] },
+      { status: 'ambiguous', range: [1, 3] },
+      { status: 'dismissed', range: [4, 8] },
     ])
+  })
+
+  it('a dismissed file review does not paint over the reviews inside it that still verify', () => {
+    expect(
+      lineStatuses(
+        [
+          { status: 'dismissed', range: [1, 10] },
+          { status: 'reviewed', range: [3, 5] },
+          { status: 'ambiguous', range: [8, 9] },
+        ],
+        10,
+      ),
+    ).toEqual([
+      { status: 'dismissed', range: [1, 2] },
+      { status: 'reviewed', range: [3, 5] },
+      { status: 'dismissed', range: [6, 10] },
+    ])
+  })
+
+  it('a stale dismissed range never hides a fresh review of the code now on those lines', () => {
+    expect(
+      lineStatuses(
+        [
+          { status: 'reviewed', range: [4, 6] },
+          { status: 'dismissed', range: [4, 6] },
+        ],
+        10,
+      ),
+    ).toEqual([{ status: 'reviewed', range: [4, 6] }])
   })
 
   it('untrusted ranges are clamped to the document and junk is dropped', () => {
@@ -58,5 +84,13 @@ describe('lineStatuses', () => {
   it('empty document or no spans -> no runs', () => {
     expect(lineStatuses([{ status: 'reviewed', range: [1, 1] }], 0)).toEqual([])
     expect(lineStatuses([], 10)).toEqual([])
+  })
+})
+
+describe('mostUrgent', () => {
+  it('dismissed, then ambiguous, then reviewed', () => {
+    expect(mostUrgent('reviewed', 'dismissed')).toBe('dismissed')
+    expect(mostUrgent('dismissed', 'ambiguous')).toBe('dismissed')
+    expect(mostUrgent('ambiguous', 'reviewed')).toBe('ambiguous')
   })
 })
