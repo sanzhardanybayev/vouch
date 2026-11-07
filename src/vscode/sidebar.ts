@@ -136,10 +136,13 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
     return this.engineers().map((e) => ({ name: e.name, email: normalizeEmail(e.email) }))
   }
 
+  // Same record set as the Reviewers section and the Filters dropdown
+  // (store.perEngineer: every current record, unknown kinds included), so a
+  // reviewer the dropdown offers always matches the files they reviewed.
   private reviewersOf(root: RootEntry, sourcePath: string): string[] {
     const state = root.store.stateFor(sourcePath)
     if (!state) return []
-    return state.current.filter(isKnownKind).map((r) => normalizeEmail(r.author.email))
+    return state.current.map((r) => normalizeEmail(r.author.email))
   }
 
   private coverageEnabled(): boolean {
