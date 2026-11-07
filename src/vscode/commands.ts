@@ -339,19 +339,39 @@ async function unvouch(
     void vscode.window.showInformationMessage('Vouch: none of your reviews cover this line.')
     return
   }
+  await revokeReviews(
+    ctx,
+    refresh,
+    rootDir,
+    sourcePath,
+    author,
+    targets.map((t) => t.record.id),
+  )
+}
+
+/** Withdraw the author's own reviews: one Tombstone each (the store is
+ * append-only), then reload. Shared by Unvouch and the actions menu. */
+async function revokeReviews(
+  ctx: VouchContext,
+  refresh: () => void,
+  rootDir: string,
+  sourcePath: string,
+  author: Author,
+  ids: string[],
+): Promise<void> {
   try {
-    for (const t of targets) {
+    for (const id of ids) {
       const tomb: Tombstone = {
         id: randomUUID(),
         author,
         createdAt: new Date().toISOString(),
-        revokes: t.record.id,
+        revokes: id,
         reason: 'unvouch',
       }
       await appendLine(rootDir, sourcePath, authorSlug(author.email), tomb)
     }
   } catch (err) {
-    void vscode.window.showErrorMessage(`Vouch: failed to write unvouch — ${String(err)}`)
+    void vscode.window.showErrorMessage(`Vouch: failed to revoke — ${String(err)}`)
     return
   }
   await ctx.reload()
@@ -700,23 +720,7 @@ export function registerCommands(
       actions.push({
         label: '$(trash) Revoke my review',
         detail: 'The code becomes honestly unreviewed; history keeps the record',
-        run: async () => {
-          const tomb: Tombstone = {
-            id: randomUUID(),
-            author,
-            createdAt: new Date().toISOString(),
-            revokes: id,
-            reason: 'unvouch',
-          }
-          try {
-            await appendLine(rootDir, sourcePath, authorSlug(author.email), tomb)
-          } catch (err) {
-            void vscode.window.showErrorMessage(`Vouch: failed to revoke — ${String(err)}`)
-            return
-          }
-          await ctx.reload()
-          refresh()
-        },
+        run: () => revokeReviews(ctx, refresh, rootDir, sourcePath, author, [id]),
       })
     }
     actions.push(
