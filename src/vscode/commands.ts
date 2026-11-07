@@ -12,8 +12,10 @@ import {
 import { prefillComment, summarizeCandidates } from '../core/consolidate'
 import {
   buildLineIndex,
+  enclosingItem,
   enclosingSymbol,
   enclosingSymbolOfRange,
+  enclosingSymbolWhere,
   hashRangeOfText,
   resolveRecord,
   resolveSymbolPathAll,
@@ -22,6 +24,7 @@ import {
 import { normalizeEol, splitLines } from '../core/text'
 import { authorSlug, normalizeEmail } from '../core/paths'
 import { isKnownKind } from '../core/records'
+import type { RustItem } from '../core/rust'
 import { appendLine, initVouch } from '../core/writer'
 import type { Author, RecordKind, ReviewRecord, Tombstone } from '../core/types'
 import type { VouchContext } from './context'
@@ -90,6 +93,19 @@ export function currentResolved(
     .map((record) => ({ record, res: resolveRecord(record, docText, symbols, index) }))
 }
 
+// Rust item reviews write the existing record kinds - macros are
+// function-like, every other item scope is a class-like container - so the
+// on-disk format is unchanged and teammates on older versions render them
+// (docs/adr/0003). The item only decides WHICH symbol gets picked.
+export const RUST_ITEM_COMMANDS: Record<RustItem, { command: string; kind: RecordKind }> = {
+  struct: { command: 'vouch.struct', kind: 'class' },
+  enum: { command: 'vouch.enum', kind: 'class' },
+  trait: { command: 'vouch.trait', kind: 'class' },
+  impl: { command: 'vouch.impl', kind: 'class' },
+  mod: { command: 'vouch.mod', kind: 'class' },
+  macro: { command: 'vouch.macro', kind: 'function' },
+}
+
 async function attest(
   extCtx: vscode.ExtensionContext,
   ctx: VouchContext,
@@ -97,11 +113,18 @@ async function attest(
   pipeline: StatusPipeline,
   kind: RecordKind,
   supersedeId?: string,
+  item?: RustItem,
 ): Promise<void> {
   const st = await editorState(ctx)
   if (!st) return
   const { editor, rootDir, sourcePath } = st
   const doc = editor.document
+  if (item && doc.languageId !== 'rust') {
+    void vscode.window.showInformationMessage(
+      `Vouch: "Review enclosing ${item}" works in Rust files only.`,
+    )
+    return
+  }
 
   // Snapshot: text, range, and symbols captured BEFORE any dialog opens.
   // The snapshot is what the user actually read - the record must attest to
@@ -136,12 +159,15 @@ async function attest(
       ? (enclosingSymbolOfRange(snapshotSymbols, range, 'any')?.path ?? '')
       : undefined
   } else if (kind === 'function' || kind === 'class') {
-    const found = snapshotSymbols
-      ? enclosingSymbol(snapshotSymbols, editor.selection.active.line + 1, kind)
-      : null
+    const line = editor.selection.active.line + 1
+    const found = !snapshotSymbols
+      ? null
+      : item
+        ? enclosingItem(snapshotSymbols, line, item)
+        : enclosingSymbol(snapshotSymbols, line, kind)
     if (!found) {
       void vscode.window.showInformationMessage(
-        `Vouch: no enclosing ${kind} symbol — select lines and use "Review selected lines".`,
+        `Vouch: no enclosing ${item ?? kind} symbol — select lines and use "Review selected lines".`,
       )
       return
     }
@@ -366,6 +392,19 @@ export function registerCommands(
   reg2('vouch.function', attestCmd('function'))
   reg2('vouch.class', attestCmd('class'))
   reg2('vouch.file', attestCmd('file'))
+  for (const [item, { command, kind }] of Object.entries(RUST_ITEM_COMMANDS)) {
+    reg2(command, (arg?: unknown) =>
+      attest(
+        extCtx,
+        ctx,
+        refresh,
+        pipeline,
+        kind,
+        typeof arg === 'string' ? arg : undefined,
+        item as RustItem,
+      ),
+    )
+  }
   reg('vouch.unvouch', () => unvouch(extCtx, ctx, refresh, pipeline))
   reg2('vouch.showDiff', (recordId: string) => showDiff(ctx, pipeline, recordId))
   reg2('vouch.openTimeline', (recordId: string) => openTimeline(ctx, pipeline, recordId))
@@ -507,9 +546,20 @@ export function registerCommands(
     let symbol: string | undefined
     let anchorSymbol: string | undefined
     if (found.record.kind === 'function' || found.record.kind === 'class') {
+      // A Rust item record (impl, mod, ...) re-anchors to the same item
+      // scope; its kindClass is 'other', so the plain kind test misses it.
+      const kind = found.record.kind
+      const item =
+        symbols && found.record.symbol
+          ? resolveSymbolPathAll(symbols, found.record.symbol)[0]?.item
+          : undefined
       symbol =
         (symbols
-          ? enclosingSymbolOfRange(symbols, picked.range, found.record.kind)?.path
+          ? enclosingSymbolWhere(
+              symbols,
+              picked.range,
+              (n) => n.kindClass === kind || (item !== undefined && n.item === item),
+            )?.path
           : undefined) ?? found.record.symbol
     } else if (found.record.kind === 'selection') {
       anchorSymbol = symbols
@@ -648,10 +698,16 @@ export function registerCommands(
         const symRange = new vscode.Range(node.range[0] - 1, 0, node.range[1] - 1, 0)
         editor.selection = new vscode.Selection(symRange.start, symRange.end)
         editor.revealRange(symRange, vscode.TextEditorRevealType.InCenterIfOutsideViewport)
-        await vscode.commands.executeCommand(
-          target.record.kind === 'class' ? 'vouch.class' : 'vouch.function',
-          target.record.id,
-        )
+        // Re-run the command that picks this symbol: a function/class node
+        // takes its classic command, a Rust impl/mod (kindClass 'other')
+        // its item command.
+        const command =
+          node.kindClass === target.record.kind
+            ? `vouch.${target.record.kind}`
+            : node.item
+              ? RUST_ITEM_COMMANDS[node.item].command
+              : `vouch.${target.record.kind}`
+        await vscode.commands.executeCommand(command, target.record.id)
         return
       }
     }

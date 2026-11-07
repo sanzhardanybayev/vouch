@@ -39,6 +39,30 @@
         "title": "Vouch: Review enclosing class"
       },
       {
+        "command": "vouch.struct",
+        "title": "Vouch: Review enclosing struct"
+      },
+      {
+        "command": "vouch.enum",
+        "title": "Vouch: Review enclosing enum"
+      },
+      {
+        "command": "vouch.trait",
+        "title": "Vouch: Review enclosing trait"
+      },
+      {
+        "command": "vouch.impl",
+        "title": "Vouch: Review enclosing impl"
+      },
+      {
+        "command": "vouch.mod",
+        "title": "Vouch: Review enclosing mod"
+      },
+      {
+        "command": "vouch.macro",
+        "title": "Vouch: Review enclosing macro"
+      },
+      {
         "command": "vouch.file",
         "title": "Vouch: Review entire file"
       },
@@ -96,6 +120,36 @@
           "group": "a@4"
         },
         {
+          "command": "vouch.struct",
+          "when": "editorLangId == rust",
+          "group": "ar@1"
+        },
+        {
+          "command": "vouch.enum",
+          "when": "editorLangId == rust",
+          "group": "ar@2"
+        },
+        {
+          "command": "vouch.trait",
+          "when": "editorLangId == rust",
+          "group": "ar@3"
+        },
+        {
+          "command": "vouch.impl",
+          "when": "editorLangId == rust",
+          "group": "ar@4"
+        },
+        {
+          "command": "vouch.mod",
+          "when": "editorLangId == rust",
+          "group": "ar@5"
+        },
+        {
+          "command": "vouch.macro",
+          "when": "editorLangId == rust",
+          "group": "ar@6"
+        },
+        {
           "command": "vouch.reReview",
           "group": "b@1"
         },
@@ -106,6 +160,32 @@
         {
           "command": "vouch.showDiff",
           "group": "c@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "vouch.struct",
+          "when": "editorLangId == rust"
+        },
+        {
+          "command": "vouch.enum",
+          "when": "editorLangId == rust"
+        },
+        {
+          "command": "vouch.trait",
+          "when": "editorLangId == rust"
+        },
+        {
+          "command": "vouch.impl",
+          "when": "editorLangId == rust"
+        },
+        {
+          "command": "vouch.mod",
+          "when": "editorLangId == rust"
+        },
+        {
+          "command": "vouch.macro",
+          "when": "editorLangId == rust"
         }
       ]
     },
