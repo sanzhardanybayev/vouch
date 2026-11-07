@@ -98,6 +98,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
     }),
   )
   for (const e of vscode.window.visibleTextEditors) void applyTo(e)
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (!e.affectsConfiguration('vouch.decorations.style')) return
+      for (const ed of vscode.window.visibleTextEditors) void applyTo(ed)
+    }),
+  )
 
   const tree = new CoverageTree(ctx, pipeline, context.subscriptions)
   context.subscriptions.push(vscode.window.registerTreeDataProvider('vouch.coverage', tree))

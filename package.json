@@ -220,6 +220,23 @@
           "default": true,
           "description": "Show a CodeLens above reviewed code with reviewer, time, and links to the timeline / re-review / diff."
         },
+        "vouch.decorations.style": {
+          "type": "string",
+          "enum": [
+            "bars",
+            "gutterIcons"
+          ],
+          "default": "gutterIcons",
+          "enumItemLabels": [
+            "Range bars",
+            "Gutter icons (deprecated)"
+          ],
+          "markdownEnumDescriptions": [
+            "A thin colored bar along the whole reviewed span, at the right edge of the gutter next to the line numbers. You see how far each review reaches, and a breakpoint dot on the same line stays visible. Hover the code for the review, its links and **Actions…** (re-review, resolve, revoke). Becomes the default in the next major version.",
+            "**Deprecated** - removed in the next major version. One icon on the first line of each review only, so the span is invisible; the icon fills the gutter cell where breakpoints are set, so an icon and a breakpoint on the same line cover each other."
+          ],
+          "markdownDescription": "How reviews are drawn in the editor gutter. `gutterIcons` stays the default until the next major version, which switches to `bars` and removes `gutterIcons`."
+        },
         "vouch.coverage.enabled": {
           "type": "boolean",
           "default": true,
