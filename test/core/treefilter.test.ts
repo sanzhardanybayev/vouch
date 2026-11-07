@@ -8,6 +8,7 @@ import {
   pruneTree,
   sanitizeFilter,
   MAX_PATH_REGEX,
+  MAX_STORED_PATH_REGEX,
 } from '../../src/core/treefilter'
 
 const FILES: TreeFile[] = [
@@ -100,14 +101,20 @@ describe('sanitizeFilter / isNarrowing', () => {
       DEFAULT_FILTER,
     )
   })
-  it('normalizes the reviewer and caps the regex', () => {
+  it('normalizes the reviewer and bounds the stored regex', () => {
     const f = sanitizeFilter({
       hideUnreviewed: false,
       reviewer: ' Ann@X.dev ',
-      pathRegex: 'a'.repeat(MAX_PATH_REGEX + 10),
+      pathRegex: 'a'.repeat(MAX_STORED_PATH_REGEX + 10),
     })
     expect(f.reviewer).toBe('ann@x.dev')
-    expect(f.pathRegex).toHaveLength(MAX_PATH_REGEX)
+    expect(f.pathRegex).toHaveLength(MAX_STORED_PATH_REGEX)
+  })
+  it('keeps a too-long regex as typed so it is reported, not silently cut', () => {
+    const typed = 'a'.repeat(MAX_PATH_REGEX + 100)
+    const f = sanitizeFilter({ pathRegex: typed })
+    expect(f.pathRegex).toBe(typed)
+    expect(compilePathFilter(f.pathRegex).ok).toBe(false)
   })
   it('narrowing unless every filter is off', () => {
     expect(isNarrowing(DEFAULT_FILTER)).toBe(true)

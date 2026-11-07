@@ -16,6 +16,11 @@ export const DEFAULT_FILTER: TreeFilter = { hideUnreviewed: true, reviewer: null
 
 export const MAX_PATH_REGEX = 500
 
+/** Storage bound for the regex text. Kept well above MAX_PATH_REGEX so a
+ * too-long regex is stored as typed and compilePathFilter reports it, instead
+ * of being cut into a different pattern the user never sees. */
+export const MAX_STORED_PATH_REGEX = 10 * MAX_PATH_REGEX
+
 export type PathMatcher = { ok: true; test: (p: string) => boolean } | { ok: false; error: string }
 
 export function compilePathFilter(src: string): PathMatcher {
@@ -77,6 +82,6 @@ export function sanitizeFilter(raw: unknown): TreeFilter {
       typeof o.hideUnreviewed === 'boolean' ? o.hideUnreviewed : DEFAULT_FILTER.hideUnreviewed,
     reviewer:
       typeof o.reviewer === 'string' && o.reviewer !== '' ? normalizeEmail(o.reviewer) : null,
-    pathRegex: typeof o.pathRegex === 'string' ? o.pathRegex.slice(0, MAX_PATH_REGEX) : '',
+    pathRegex: typeof o.pathRegex === 'string' ? o.pathRegex.slice(0, MAX_STORED_PATH_REGEX) : '',
   }
 }
