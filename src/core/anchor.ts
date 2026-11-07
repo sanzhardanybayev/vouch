@@ -1,10 +1,15 @@
 import { hashLines, normalizeEol, sha256, splitLines } from './text'
 import { isKnownKind } from './records'
+import type { RustItem } from './rust'
 import type { ReviewRecord } from './types'
 
 export interface SymbolNode {
   name: string
   kindClass: 'function' | 'class' | 'other'
+  /** Rust item scope (Rust documents only). Selects targets for the
+   * item-specific review commands; never feeds kindClass, so anchors and
+   * resolution stay identical across clients and versions. */
+  item?: RustItem
   range: [number, number] // 1-based inclusive full range
   children: SymbolNode[]
 }
@@ -57,12 +62,30 @@ export function enclosingSymbolOfRange(
   range: [number, number],
   want: SymbolWant,
 ): { path: string; range: [number, number] } | null {
+  return enclosingSymbolWhere(roots, range, (n) => wants(n, want))
+}
+
+/** Deepest Rust item of the given scope enclosing `line`. */
+export function enclosingItem(
+  roots: SymbolNode[],
+  line: number,
+  item: RustItem,
+): { path: string; range: [number, number] } | null {
+  return enclosingSymbolWhere(roots, [line, line], (n) => n.item === item)
+}
+
+/** Deepest symbol matching `pred` whose range encloses the WHOLE given range. */
+export function enclosingSymbolWhere(
+  roots: SymbolNode[],
+  range: [number, number],
+  pred: (n: SymbolNode) => boolean,
+): { path: string; range: [number, number] } | null {
   let best: { path: string; range: [number, number]; depth: number } | null = null
   const visit = (nodes: SymbolNode[], prefix: string[], depth: number): void => {
     for (const n of nodes) {
       if (range[0] < n.range[0] || range[1] > n.range[1]) continue
       const path = [...prefix, n.name]
-      if (wants(n, want) && (best === null || depth > best.depth)) {
+      if (pred(n) && (best === null || depth > best.depth)) {
         best = { path: path.join('/'), range: n.range, depth }
       }
       visit(n.children, path, depth + 1)
