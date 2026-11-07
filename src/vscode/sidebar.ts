@@ -16,6 +16,14 @@ import { aggregateEngineers } from '../core/engineers'
 import { shouldRequeue } from '../core/requeue'
 import { compileVouchIgnore, type VouchIgnore } from '../core/vouchignore'
 import { isKnownKind } from '../core/records'
+import { normalizeEmail } from '../core/paths'
+import {
+  DEFAULT_FILTER,
+  fileMatcher,
+  isNarrowing,
+  pruneTree,
+  type TreeFilter,
+} from '../core/treefilter'
 import type { VouchContext, RootEntry } from './context'
 import type { StatusPipeline } from './pipeline'
 import { lsFiles } from './gitinfo'
@@ -33,6 +41,7 @@ type Item =
   | { t: 'folder'; root: RootEntry; node: TreeFolder }
   | { t: 'file'; root: RootEntry; file: TreeFile }
   | { t: 'welcome'; root: RootEntry }
+  | { t: 'noMatch' }
   | { t: 'orphanRoot' }
   | { t: 'orphan'; path: string }
 
@@ -47,6 +56,7 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
   private queue: { root: RootEntry; sourcePath: string }[] = []
   private queueRunning = false
   private fsWatchTimer: ReturnType<typeof setTimeout> | undefined
+  private filter: TreeFilter = DEFAULT_FILTER
 
   constructor(
     private readonly ctx: VouchContext,
@@ -112,6 +122,27 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
       w.onDidDelete(onChange)
       return w
     })
+  }
+
+  // View-only: the filter prunes what the tree shows, never what it counts
+  // (header and folder percentages stay those of the full universe).
+  setFilter(filter: TreeFilter): void {
+    this.filter = filter
+    this.emitter.fire(undefined)
+  }
+
+  /** Reviewers with current reviews in the shown universe (Filters dropdown). */
+  reviewers(): { name: string; email: string }[] {
+    return this.engineers().map((e) => ({ name: e.name, email: normalizeEmail(e.email) }))
+  }
+
+  // Same record set as the Reviewers section and the Filters dropdown
+  // (store.perEngineer: every current record, unknown kinds included), so a
+  // reviewer the dropdown offers always matches the files they reviewed.
+  private reviewersOf(root: RootEntry, sourcePath: string): string[] {
+    const state = root.store.stateFor(sourcePath)
+    if (!state) return []
+    return state.current.map((r) => normalizeEmail(r.author.email))
   }
 
   private coverageEnabled(): boolean {
@@ -431,6 +462,14 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
       if (corrupt > 0) {
         notes.push(`${corrupt} unreadable line(s) in .vouch records - some reviews may be missing.`)
       }
+      if (this.coverageEnabled() && isNarrowing(this.filter)) {
+        const parts: string[] = []
+        if (this.filter.hideUnreviewed) parts.push('files with no reviews hidden')
+        if (this.filter.reviewer) parts.push(`reviewer ${this.filter.reviewer}`)
+        if (this.filter.pathRegex) parts.push(`path /${this.filter.pathRegex}/`)
+        item.description += ' · filtered'
+        notes.push(`Filtered (${parts.join('; ')}). Percentages still count every file.`)
+      }
       if (notes.length > 0) item.tooltip = notes.join('\n')
       item.iconPath = new vscode.ThemeIcon('shield')
       return item
@@ -443,6 +482,14 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
       item.description = path.basename(el.root.rootDir)
       item.iconPath = new vscode.ThemeIcon('rocket')
       item.command = { command: 'vouch.init', title: 'Initialize' }
+      return item
+    }
+    if (el.t === 'noMatch') {
+      const item = new vscode.TreeItem(
+        'No files match the filters',
+        vscode.TreeItemCollapsibleState.None,
+      )
+      item.iconPath = new vscode.ThemeIcon('filter')
       return item
     }
     if (el.t === 'reviewersRoot') {
@@ -526,15 +573,21 @@ export class CoverageTree implements vscode.TreeDataProvider<Item> {
       const out: Item[] = [{ t: 'header' }]
       if (this.engineers().length > 0) out.push({ t: 'reviewersRoot' })
       if (this.coverageEnabled()) {
+        let liveRoots = 0
+        let shown = 0
         for (const root of this.ctx.roots) {
           if (!this.rootLive(root)) {
             out.push({ t: 'welcome', root })
             continue
           }
-          const tree = buildTree(this.treeFiles(root))
+          liveRoots++
+          const keep = fileMatcher(this.filter, (p) => this.reviewersOf(root, p))
+          const tree = pruneTree(buildTree(this.treeFiles(root)), keep)
+          shown += tree.folders.length + tree.files.length
           out.push(...tree.folders.map((node) => ({ t: 'folder' as const, root, node })))
           out.push(...tree.files.map((file) => ({ t: 'file' as const, root, file })))
         }
+        if (liveRoots > 0 && shown === 0 && isNarrowing(this.filter)) out.push({ t: 'noMatch' })
       }
       const orphans = this.ctx.roots.flatMap((r) =>
         r.store.orphans((p) => fs.existsSync(path.join(r.rootDir, p)), this.includeFor(r)),

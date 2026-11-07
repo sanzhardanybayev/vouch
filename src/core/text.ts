@@ -17,6 +17,26 @@ export function countLines(text: string): number {
   return t.endsWith('\n') ? parts.length - 1 : parts.length
 }
 
+/** Whitespace-only lines carry no code, so they need no review. */
+export function isBlankLine(line: string): boolean {
+  return line.trim() === ''
+}
+
+/**
+ * 1-based numbers of the lines that count toward coverage: every line under
+ * the countLines convention except blank (whitespace-only) ones. A file of
+ * two fully reviewed functions separated by an empty line must read 100%.
+ */
+export function codeLineNumbers(text: string): number[] {
+  const total = countLines(text)
+  const lines = splitLines(text)
+  const out: number[] = []
+  for (let i = 0; i < total; i++) {
+    if (!isBlankLine(lines[i] ?? '')) out.push(i + 1)
+  }
+  return out
+}
+
 export function sha256(text: string): string {
   return 'sha256:' + createHash('sha256').update(text, 'utf8').digest('hex')
 }

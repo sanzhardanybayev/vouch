@@ -36,6 +36,29 @@ describe('fileCoverage', () => {
   })
 })
 
+describe('fileCoverage — blank lines need no review', () => {
+  // Two functions separated by a blank line, plus a trailing blank line.
+  const TWO_FNS = 'fn a() {\n  1\n}\n\nfn b() {\n  2\n}\n   \n'
+  it('blank and whitespace-only lines leave the denominator', () => {
+    expect(fileCoverage([], TWO_FNS)).toEqual({ reviewedLines: 0, totalLines: 6 })
+  })
+  it('every function reviewed -> 100% even with blank lines between them', () => {
+    const c = fileCoverage([entry([1, 3]), entry([5, 7])], TWO_FNS)!
+    expect(c).toEqual({ reviewedLines: 6, totalLines: 6 })
+    expect(pct(c)).toBe(100)
+  })
+  it('a reviewed range spanning blank lines counts only its code lines', () => {
+    expect(fileCoverage([entry([3, 5])], TWO_FNS)).toEqual({ reviewedLines: 2, totalLines: 6 })
+  })
+  it('blank-only file -> null (excluded from rollups)', () => {
+    expect(fileCoverage([], '\n  \n\t\n')).toBeNull()
+  })
+  it('kind=file review covers every code line', () => {
+    const c = fileCoverage([entry([1, 8], 'reviewed', 'file')], TWO_FNS)!
+    expect(c).toEqual({ reviewedLines: 6, totalLines: 6 })
+  })
+})
+
 describe('rollup / pct', () => {
   it('raw line sums, nulls skipped', () => {
     const r = rollup([

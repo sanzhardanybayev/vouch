@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 import { looksFunctionValued, type SymbolNode } from '../core/anchor'
+import { sniffRustItem } from '../core/rust'
 
 function kindClass(s: vscode.DocumentSymbol, doc: vscode.TextDocument): SymbolNode['kindClass'] {
   const K = vscode.SymbolKind
@@ -17,13 +18,28 @@ function kindClass(s: vscode.DocumentSymbol, doc: vscode.TextDocument): SymbolNo
   return 'other'
 }
 
+// The declaration head (comments, attributes, keywords) runs from the
+// symbol's start to its name; servers that don't separate the two get the
+// first line instead. Bounded either way - never the whole item body.
+function rustItem(s: vscode.DocumentSymbol, doc: vscode.TextDocument): SymbolNode['item'] {
+  const head = s.selectionRange.start.isAfter(s.range.start)
+    ? new vscode.Range(s.range.start, s.selectionRange.start)
+    : doc.lineAt(s.range.start.line).range
+  return sniffRustItem(doc.getText(head) + ' ' + s.name) ?? undefined
+}
+
 function toNode(s: vscode.DocumentSymbol, doc: vscode.TextDocument): SymbolNode {
-  return {
+  const node: SymbolNode = {
     name: s.name,
     kindClass: kindClass(s, doc),
     range: [s.range.start.line + 1, s.range.end.line + 1],
     children: s.children.map((c) => toNode(c, doc)),
   }
+  if (doc.languageId === 'rust') {
+    const item = rustItem(s, doc)
+    if (item) node.item = item
+  }
+  return node
 }
 
 /**

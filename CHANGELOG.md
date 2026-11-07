@@ -5,6 +5,41 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Rust review commands.** `Review enclosing struct` (unions too), `enum`,
+  `trait`, `impl`, `mod`, and `macro` (`macro_rules!` and `macro`) pick the
+  enclosing Rust item; impl and mod blocks previously had no command at all.
+  Shown in the Vouch menu and the palette for Rust files only. Records keep
+  the existing kinds, so older clients render them (ADR 0003).
+- **Range bars** (opt in with `vouch.decorations.style: "bars"`; the default
+  from the next major version): a thin bar on every line of a reviewed span,
+  at the right edge of the gutter next to the line numbers. It shows how far
+  each review reaches, and a breakpoint on the same line stays visible.
+- **Show/hide review marks**: an eye button in the Review Coverage view title
+  hides the bars or icons in all editors while you write code; remembered
+  per workspace.
+- **Review actions menu**: an **Actions…** link in the review hover and the
+  `Vouch: Review actions at cursor…` command offer resolve, re-review, revoke,
+  diff, timeline, and the commit link for the review under the cursor.
+- **Filters view** above the coverage tree: hide files with no reviews (on by
+  default), filter by reviewer, filter by a path regex. Percentages keep
+  counting every file.
+
+### Changed
+
+- **Blank lines no longer count toward coverage.** Whitespace-only lines are
+  left out of both reviewed and total line counts, so a file whose every
+  function is reviewed reads 100%.
+
+### Deprecated
+
+- **Gutter icons** (`vouch.decorations.style: "gutterIcons"`, still the
+  default): removed in the next major version, which makes range bars the
+  default. An icon marks only the first line of a review, so the reviewed
+  span is invisible, and it fills the gutter cell where breakpoints are set:
+  an icon and a breakpoint on the same line cover each other.
+
 ## [0.1.2] - 2026-08-05
 
 ### Fixed

@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeEol, splitLines, countLines, sha256, hashLines } from '../../src/core/text'
+import {
+  normalizeEol,
+  splitLines,
+  countLines,
+  codeLineNumbers,
+  sha256,
+  hashLines,
+} from '../../src/core/text'
 
 describe('normalizeEol', () => {
   it('converts CRLF to LF, leaves LF alone', () => {
@@ -30,5 +37,18 @@ describe('hashing', () => {
   })
   it('is deterministic', () => {
     expect(sha256('x')).toBe(sha256('x'))
+  })
+})
+
+describe('codeLineNumbers (coverage lines)', () => {
+  it('skips blank and whitespace-only lines', () => {
+    expect(codeLineNumbers('a\n\n \t\nb')).toEqual([1, 4])
+  })
+  it('follows the countLines trailing-newline convention', () => {
+    expect(codeLineNumbers('a\nb\n')).toEqual([1, 2])
+    expect(codeLineNumbers('')).toEqual([])
+  })
+  it('CRLF input behaves like LF', () => {
+    expect(codeLineNumbers('a\r\n\r\nb\r\n')).toEqual([1, 3])
   })
 })

@@ -57,6 +57,7 @@ export function registerHovers(
         // controlled text from other users' .vouch/ records.
         md.isTrusted = {
           enabledCommands: [
+            'vouch.actions',
             'vouch.openTimeline',
             'vouch.showDiff',
             'vouch.reReview',

@@ -12,8 +12,10 @@ import {
 import { prefillComment, summarizeCandidates } from '../core/consolidate'
 import {
   buildLineIndex,
+  enclosingItem,
   enclosingSymbol,
   enclosingSymbolOfRange,
+  enclosingSymbolWhere,
   hashRangeOfText,
   resolveRecord,
   resolveSymbolPathAll,
@@ -22,8 +24,10 @@ import {
 import { normalizeEol, splitLines } from '../core/text'
 import { authorSlug, normalizeEmail } from '../core/paths'
 import { isKnownKind } from '../core/records'
+import type { RustItem } from '../core/rust'
 import { appendLine, initVouch } from '../core/writer'
 import type { Author, RecordKind, ReviewRecord, Tombstone } from '../core/types'
+import { escapeIcons } from '../core/quickpick'
 import type { VouchContext } from './context'
 import type { StatusPipeline } from './pipeline'
 import { documentSymbols } from './symbols'
@@ -90,6 +94,19 @@ export function currentResolved(
     .map((record) => ({ record, res: resolveRecord(record, docText, symbols, index) }))
 }
 
+// Rust item reviews write the existing record kinds - macros are
+// function-like, every other item scope is a class-like container - so the
+// on-disk format is unchanged and teammates on older versions render them
+// (docs/adr/0003). The item only decides WHICH symbol gets picked.
+export const RUST_ITEM_COMMANDS: Record<RustItem, { command: string; kind: RecordKind }> = {
+  struct: { command: 'vouch.struct', kind: 'class' },
+  enum: { command: 'vouch.enum', kind: 'class' },
+  trait: { command: 'vouch.trait', kind: 'class' },
+  impl: { command: 'vouch.impl', kind: 'class' },
+  mod: { command: 'vouch.mod', kind: 'class' },
+  macro: { command: 'vouch.macro', kind: 'function' },
+}
+
 async function attest(
   extCtx: vscode.ExtensionContext,
   ctx: VouchContext,
@@ -97,11 +114,18 @@ async function attest(
   pipeline: StatusPipeline,
   kind: RecordKind,
   supersedeId?: string,
+  item?: RustItem,
 ): Promise<void> {
   const st = await editorState(ctx)
   if (!st) return
   const { editor, rootDir, sourcePath } = st
   const doc = editor.document
+  if (item && doc.languageId !== 'rust') {
+    void vscode.window.showInformationMessage(
+      `Vouch: "Review enclosing ${item}" works in Rust files only.`,
+    )
+    return
+  }
 
   // Snapshot: text, range, and symbols captured BEFORE any dialog opens.
   // The snapshot is what the user actually read - the record must attest to
@@ -136,12 +160,15 @@ async function attest(
       ? (enclosingSymbolOfRange(snapshotSymbols, range, 'any')?.path ?? '')
       : undefined
   } else if (kind === 'function' || kind === 'class') {
-    const found = snapshotSymbols
-      ? enclosingSymbol(snapshotSymbols, editor.selection.active.line + 1, kind)
-      : null
+    const line = editor.selection.active.line + 1
+    const found = !snapshotSymbols
+      ? null
+      : item
+        ? enclosingItem(snapshotSymbols, line, item)
+        : enclosingSymbol(snapshotSymbols, line, kind)
     if (!found) {
       void vscode.window.showInformationMessage(
-        `Vouch: no enclosing ${kind} symbol — select lines and use "Review selected lines".`,
+        `Vouch: no enclosing ${item ?? kind} symbol — select lines and use "Review selected lines".`,
       )
       return
     }
@@ -312,19 +339,39 @@ async function unvouch(
     void vscode.window.showInformationMessage('Vouch: none of your reviews cover this line.')
     return
   }
+  await revokeReviews(
+    ctx,
+    refresh,
+    rootDir,
+    sourcePath,
+    author,
+    targets.map((t) => t.record.id),
+  )
+}
+
+/** Withdraw the author's own reviews: one Tombstone each (the store is
+ * append-only), then reload. Shared by Unvouch and the actions menu. */
+async function revokeReviews(
+  ctx: VouchContext,
+  refresh: () => void,
+  rootDir: string,
+  sourcePath: string,
+  author: Author,
+  ids: string[],
+): Promise<void> {
   try {
-    for (const t of targets) {
+    for (const id of ids) {
       const tomb: Tombstone = {
         id: randomUUID(),
         author,
         createdAt: new Date().toISOString(),
-        revokes: t.record.id,
+        revokes: id,
         reason: 'unvouch',
       }
       await appendLine(rootDir, sourcePath, authorSlug(author.email), tomb)
     }
   } catch (err) {
-    void vscode.window.showErrorMessage(`Vouch: failed to write unvouch — ${String(err)}`)
+    void vscode.window.showErrorMessage(`Vouch: failed to revoke — ${String(err)}`)
     return
   }
   await ctx.reload()
@@ -366,6 +413,19 @@ export function registerCommands(
   reg2('vouch.function', attestCmd('function'))
   reg2('vouch.class', attestCmd('class'))
   reg2('vouch.file', attestCmd('file'))
+  for (const [item, { command, kind }] of Object.entries(RUST_ITEM_COMMANDS)) {
+    reg2(command, (arg?: unknown) =>
+      attest(
+        extCtx,
+        ctx,
+        refresh,
+        pipeline,
+        kind,
+        typeof arg === 'string' ? arg : undefined,
+        item as RustItem,
+      ),
+    )
+  }
   reg('vouch.unvouch', () => unvouch(extCtx, ctx, refresh, pipeline))
   reg2('vouch.showDiff', (recordId: string) => showDiff(ctx, pipeline, recordId))
   reg2('vouch.openTimeline', (recordId: string) => openTimeline(ctx, pipeline, recordId))
@@ -387,7 +447,7 @@ export function registerCommands(
         r.kind === 'file'
           ? 'file'
           : (r.symbol ?? (r.range ? `L${r.range[0]}-${r.range[1]}` : r.kind))
-      return [{ label: `${r.author.name} - ${r.kind} ${scope}`, id }]
+      return [{ label: escapeIcons(`${r.author.name} - ${r.kind} ${scope}`), id }]
     })
     const picked = await vscode.window.showQuickPick(items, {
       placeHolder: 'Vouch: pick the review to diff',
@@ -507,9 +567,20 @@ export function registerCommands(
     let symbol: string | undefined
     let anchorSymbol: string | undefined
     if (found.record.kind === 'function' || found.record.kind === 'class') {
+      // A Rust item record (impl, mod, ...) re-anchors to the same item
+      // scope; its kindClass is 'other', so the plain kind test misses it.
+      const kind = found.record.kind
+      const item =
+        symbols && found.record.symbol
+          ? resolveSymbolPathAll(symbols, found.record.symbol)[0]?.item
+          : undefined
       symbol =
         (symbols
-          ? enclosingSymbolOfRange(symbols, picked.range, found.record.kind)?.path
+          ? enclosingSymbolWhere(
+              symbols,
+              picked.range,
+              (n) => n.kindClass === kind || (item !== undefined && n.item === item),
+            )?.path
           : undefined) ?? found.record.symbol
     } else if (found.record.kind === 'selection') {
       anchorSymbol = symbols
@@ -564,6 +635,114 @@ export function registerCommands(
       return
     }
     void vscode.env.openExternal(vscode.Uri.parse(url))
+  })
+
+  // The status menu behind a review bar (hover "Actions…" link, editor
+  // menu, palette). It offers only the verbs Vouch has - re-review, resolve,
+  // revoke, inspect: a status is never set by hand (docs/adr/0002).
+  // Accepts a record id (hover link) or nothing (reviews at the cursor).
+  reg2('vouch.actions', async (arg?: unknown) => {
+    let doc: vscode.TextDocument
+    let rootDir: string
+    let sourcePath: string
+    let line: number | undefined
+    if (typeof arg === 'string') {
+      const found = findRecord(ctx, arg)
+      if (!found) {
+        void vscode.window.showWarningMessage('Vouch: record not found.')
+        return
+      }
+      ;({ rootDir, sourcePath } = found)
+      try {
+        doc = await vscode.workspace.openTextDocument(
+          vscode.Uri.file(path.join(rootDir, sourcePath)),
+        )
+      } catch {
+        void vscode.window.showWarningMessage(`Vouch: ${sourcePath} not found.`)
+        return
+      }
+    } else {
+      const st = await editorState(ctx)
+      if (!st) return
+      ;({ rootDir, sourcePath } = st)
+      doc = st.editor.document
+      line = st.editor.selection.active.line + 1
+    }
+    const entries = (await pipeline.statusFor(doc)).entries.filter((e) =>
+      typeof arg === 'string'
+        ? e.record.id === arg
+        : e.record.kind === 'file' || overlaps(e.res.effectiveRange, [line!, line!]),
+    )
+    if (entries.length === 0) {
+      void vscode.window.showInformationMessage('Vouch: no reviews cover this line.')
+      return
+    }
+    const describe = (e: (typeof entries)[number]): string => {
+      const r = e.record
+      const scope =
+        r.kind === 'file'
+          ? 'file'
+          : `${r.kind} ${r.symbol ?? `L${e.res.effectiveRange[0]}-${e.res.effectiveRange[1]}`}`
+      return escapeIcons(`${e.res.status} - ${r.author.name} - ${scope}`)
+    }
+    let entry = entries[0]!
+    if (entries.length > 1) {
+      // Labels carry untrusted record text. A QuickPick renders no markdown
+      // or links, but it does render $(codicon) tokens: describe() escapes them.
+      const picked = await vscode.window.showQuickPick(
+        entries.map((e) => ({ label: describe(e), entry: e })),
+        { placeHolder: 'Vouch: several reviews cover this line - pick one' },
+      )
+      if (!picked) return
+      entry = picked.entry
+    }
+    const author = await resolveAuthor(extCtx, rootDir)
+    if (!author) return
+    const id = entry.record.id
+    const mine = normalizeEmail(entry.record.author.email) === normalizeEmail(author.email)
+    type Action = vscode.QuickPickItem & { run: () => Thenable<unknown> | Promise<unknown> }
+    const actions: Action[] = []
+    if (mine && entry.res.status === 'ambiguous') {
+      actions.push({
+        label: '$(pin) Resolve',
+        detail: 'Pin this review to the location you actually reviewed',
+        run: () => vscode.commands.executeCommand('vouch.resolveAmbiguous', id),
+      })
+    }
+    actions.push({
+      label: mine ? '$(check) Re-review' : '$(check) Review it yourself',
+      detail: mine
+        ? 'Vouch again for the code as it is now; replaces this review'
+        : `Add your own review next to ${escapeIcons(entry.record.author.name)}'s`,
+      run: () => vscode.commands.executeCommand('vouch.reReview', id),
+    })
+    if (mine) {
+      actions.push({
+        label: '$(trash) Revoke my review',
+        detail: 'The code becomes honestly unreviewed; history keeps the record',
+        run: () => revokeReviews(ctx, refresh, rootDir, sourcePath, author, [id]),
+      })
+    }
+    actions.push(
+      {
+        label: '$(diff) Diff since review',
+        run: () => vscode.commands.executeCommand('vouch.showDiff', id),
+      },
+      {
+        label: '$(history) Open timeline',
+        run: () => vscode.commands.executeCommand('vouch.openTimeline', id),
+      },
+    )
+    if (entry.record.commit && isValidSha(entry.record.commit)) {
+      actions.push({
+        label: '$(link-external) Open review commit on web',
+        run: () => vscode.commands.executeCommand('vouch.openCommitOnWeb', id),
+      })
+    }
+    const choice = await vscode.window.showQuickPick(actions, {
+      placeHolder: `Vouch: ${describe(entry)}`,
+    })
+    if (choice) await choice.run()
   })
 
   // Accepts a record id (hover/timeline links), a {line} hint (CodeLens
@@ -648,10 +827,16 @@ export function registerCommands(
         const symRange = new vscode.Range(node.range[0] - 1, 0, node.range[1] - 1, 0)
         editor.selection = new vscode.Selection(symRange.start, symRange.end)
         editor.revealRange(symRange, vscode.TextEditorRevealType.InCenterIfOutsideViewport)
-        await vscode.commands.executeCommand(
-          target.record.kind === 'class' ? 'vouch.class' : 'vouch.function',
-          target.record.id,
-        )
+        // Re-run the command that picks this symbol: a function/class node
+        // takes its classic command, a Rust impl/mod (kindClass 'other')
+        // its item command.
+        const command =
+          node.kindClass === target.record.kind
+            ? `vouch.${target.record.kind}`
+            : node.item
+              ? RUST_ITEM_COMMANDS[node.item].command
+              : `vouch.${target.record.kind}`
+        await vscode.commands.executeCommand(command, target.record.id)
         return
       }
     }

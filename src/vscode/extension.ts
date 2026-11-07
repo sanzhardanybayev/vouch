@@ -6,6 +6,7 @@ import { Gutter } from './gutter'
 import { registerHovers } from './hovers'
 import { VouchBaselineProvider } from './diff'
 import { CoverageTree } from './sidebar'
+import { FiltersView } from './filters'
 import { VouchCodeLensProvider } from './codelens'
 import { initLog, logError } from './log'
 
@@ -97,10 +98,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
       for (const e of eds) void applyTo(e)
     }),
   )
-  for (const e of vscode.window.visibleTextEditors) void applyTo(e)
+  // Review marks matter while reviewing, not while writing code: a toggle in
+  // the coverage view title hides them, remembered per workspace.
+  const HIDDEN_KEY = 'vouch.decorationsHidden'
+  const setMarksHidden = (hidden: boolean): void => {
+    gutter.setHidden(hidden)
+    void context.workspaceState.update(HIDDEN_KEY, hidden)
+    void vscode.commands.executeCommand('setContext', HIDDEN_KEY, hidden)
+    for (const ed of vscode.window.visibleTextEditors) void applyTo(ed)
+  }
+  setMarksHidden(context.workspaceState.get<boolean>(HIDDEN_KEY, false) === true)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vouch.hideDecorations', () => setMarksHidden(true)),
+    vscode.commands.registerCommand('vouch.showDecorations', () => setMarksHidden(false)),
+  )
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (!e.affectsConfiguration('vouch.decorations.style')) return
+      for (const ed of vscode.window.visibleTextEditors) void applyTo(ed)
+    }),
+  )
 
   const tree = new CoverageTree(ctx, pipeline, context.subscriptions)
   context.subscriptions.push(vscode.window.registerTreeDataProvider('vouch.coverage', tree))
+  const filters = new FiltersView(context.workspaceState, () => tree.reviewers())
+  tree.setFilter(filters.current)
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(FiltersView.viewId, filters),
+    filters.onDidChange((f) => tree.setFilter(f)),
+    ctx.onDidChange(() => filters.refresh()),
+  )
 
   // Damaged shards must be visible, not silently under-counted: warn once
   // whenever the corrupt-line total grows (merge-conflict leftovers, crashed

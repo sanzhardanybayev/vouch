@@ -1,7 +1,10 @@
-import { countLines } from './text'
+import { codeLineNumbers } from './text'
 import type { Resolution } from './anchor'
 import type { ReviewRecord } from './types'
 
+// Line counts here are CODE lines: blank (whitespace-only) lines are neither
+// reviewable nor unreviewed, so they stay out of both numerator and
+// denominator (see core/text.ts codeLineNumbers).
 export interface FileCoverage {
   reviewedLines: number
   totalLines: number
@@ -11,19 +14,20 @@ export function fileCoverage(
   resolved: { record: ReviewRecord; res: Resolution }[],
   docText: string,
 ): FileCoverage | null {
-  const totalLines = countLines(docText)
+  const code = codeLineNumbers(docText)
+  const totalLines = code.length
   if (totalLines === 0) return null
   if (resolved.some((e) => e.record.kind === 'file' && e.res.status === 'reviewed')) {
     return { reviewedLines: totalLines, totalLines }
   }
-  const covered = new Set<number>()
-  for (const { res } of resolved) {
-    if (res.status !== 'reviewed') continue
-    const start = Math.max(1, res.effectiveRange[0])
-    const end = Math.min(totalLines, res.effectiveRange[1])
-    for (let l = start; l <= end; l++) covered.add(l)
+  const reviewed = resolved
+    .filter(({ res }) => res.status === 'reviewed')
+    .map(({ res }) => res.effectiveRange)
+  let reviewedLines = 0
+  for (const line of code) {
+    if (reviewed.some(([s, e]) => s <= line && line <= e)) reviewedLines++
   }
-  return { reviewedLines: covered.size, totalLines }
+  return { reviewedLines, totalLines }
 }
 
 export function rollup(children: (FileCoverage | null)[]): FileCoverage | null {
