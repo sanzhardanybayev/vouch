@@ -1,11 +1,8 @@
 import * as vscode from 'vscode'
 import type { Status } from '../core/anchor'
-import { lineStatuses } from '../core/bars'
+import { lineStatuses, mostUrgent } from '../core/bars'
 import type { FileStatus } from './pipeline'
 
-// Per-line precedence when records share an anchor line: a dismissed review
-// needs action first, an unresolved ambiguity second, a green check last.
-const RANK: Record<Status, number> = { dismissed: 2, ambiguous: 1, reviewed: 0 }
 const STATUSES = ['reviewed', 'dismissed', 'ambiguous'] as const
 
 export type DecorationStyle = 'bars' | 'gutterIcons'
@@ -107,8 +104,9 @@ export class Gutter {
     const byLine = new Map<number, Status>()
     for (const { res } of status.entries) {
       const line = res.effectiveRange[0]
+      // Records sharing a first line: show the one that needs attention first.
       const prev = byLine.get(line)
-      byLine.set(line, prev !== undefined && RANK[prev] >= RANK[res.status] ? prev : res.status)
+      byLine.set(line, prev === undefined ? res.status : mostUrgent(prev, res.status))
     }
     for (const want of STATUSES) {
       const ranges = [...byLine.entries()]
