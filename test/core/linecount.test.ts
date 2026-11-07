@@ -34,4 +34,12 @@ describe('textFileCoverage', () => {
       totalLines: 3,
     })
   })
+
+  it('blank lines are not counted; blank-only text -> null', () => {
+    expect(textFileCoverage(Buffer.from('a\n\n  \nb\n', 'utf8'))).toEqual({
+      reviewedLines: 0,
+      totalLines: 2,
+    })
+    expect(textFileCoverage(Buffer.from('\n\n\t\n', 'utf8'))).toBeNull()
+  })
 })
