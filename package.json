@@ -245,6 +245,11 @@
     "views": {
       "vouch": [
         {
+          "type": "webview",
+          "id": "vouch.filters",
+          "name": "Filters"
+        },
+        {
           "id": "vouch.coverage",
           "name": "Review Coverage"
         }

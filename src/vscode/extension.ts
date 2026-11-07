@@ -6,6 +6,7 @@ import { Gutter } from './gutter'
 import { registerHovers } from './hovers'
 import { VouchBaselineProvider } from './diff'
 import { CoverageTree } from './sidebar'
+import { FiltersView } from './filters'
 import { VouchCodeLensProvider } from './codelens'
 import { initLog, logError } from './log'
 
@@ -120,6 +121,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<{
 
   const tree = new CoverageTree(ctx, pipeline, context.subscriptions)
   context.subscriptions.push(vscode.window.registerTreeDataProvider('vouch.coverage', tree))
+  const filters = new FiltersView(context.workspaceState, () => tree.reviewers())
+  tree.setFilter(filters.current)
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(FiltersView.viewId, filters),
+    filters.onDidChange((f) => tree.setFilter(f)),
+    ctx.onDidChange(() => filters.refresh()),
+  )
 
   // Damaged shards must be visible, not silently under-counted: warn once
   // whenever the corrupt-line total grows (merge-conflict leftovers, crashed
